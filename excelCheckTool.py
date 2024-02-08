@@ -28,6 +28,16 @@ from openpyxl.utils.units import pixels_to_EMU
 
 # from PIL import Image, ImageGrab
 
+# [Paths]
+# default_path = E:\
+# default_output_path = G:
+# output_compare_path = compare
+#
+# [Output]
+# output_image = _output.png
+# output_result = output.xlsx
+
+
 input_browse = ''
 content_for_table = ''
 col = 1
