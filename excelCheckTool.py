@@ -20,54 +20,89 @@ from datetime import datetime
 from openpyxl import load_workbook
 from PIL import Image, ImageGrab
 
+input_browse = ''
+content_for_table = ''
+
 
 def get_program_path():
-    print('path start...')
     return os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
 def get_config_file_path():
-    print('config start...')
     return os.path.join(get_program_path(), ".excel_config.ini")
 
 
-def load_file_paths(self):
-    print('load start...')
-    self.config = ConfigParser()
-    self.config.read(get_config_file_path())
-    return self.config['Paths'] if 'Paths' in self.config else {}
+def load_config_content(tag):
+    config = ConfigParser()
+    config.read(get_config_file_path())
+    return config[tag] if tag in config else {}
 
 
 def save_file_paths(self):
     if self.parent.input_browse.text():
         config = ConfigParser()
-        config['Paths'] = {'default_path': os.path.dirname(os.path.abspath(self.parent.input_browse.text()))}
+        config.read(get_config_file_path())
+        config.set('Paths', 'default_path', os.path.dirname(os.path.abspath(self.parent.input_browse.text())))
         with open(get_config_file_path(), 'w') as configfile:
             config.write(configfile)
 
 
-def compare_images(image1_path, image2_path):
-    green_color = (0, 255, 0)
-    red_color = (0, 0, 255)
-    cyan_color = (255, 255, 0)
+def set_error_message(self, content):
+    QMessageBox.critical(self, "エラー", content)
+    return False
 
-    rect_color = red_color
-    rect_size = 3
-    txt_color = red_color
-    txt_size = 6
+
+def tmp_files_del():
+    # 目録
+    if os.path.exists(input_browse.split('.')[0]):
+        shutil.rmtree(input_browse.split('.')[0])
+    else:
+        print('目録が存在しない。')
+
+    # ZIPファイル
+    if os.path.exists(input_browse.split('.')[0] + '.zip'):
+        os.remove(input_browse.split('.')[0] + '.zip')
+    else:
+        print('ZIPが存在しない。')
+
+
+def compare_images(image1_path, image2_path):
+    # 色を設定
+    green_color = (0, 255, 0)
+    yellow_color = (0, 255, 255)
+    cyan_color = (255, 255, 0)
+    black_color = (0, 0, 0)
+
+    rect_color = yellow_color
+    rect_size = 2
+    txt_color = black_color
+    txt_size = 2
 
     contour_color1 = green_color
     contour_color2 = cyan_color
 
-    offset = 40
+    # 偏位量を設定
+    offset = -15
 
-    # Loading images using OpencV
+    # イメージロード
     img1 = cv2.imread(image1_path)
     img2 = cv2.imread(image2_path)
 
     print("Comparing images:", image1_path, "and", image2_path)
 
-    # Switch to gray
+    # イメージのサイズを取得
+    width1 = img1.shape[0]
+    height1 = img1.shape[1]
+    width2 = img2.shape[0]
+    height2 = img2.shape[1]
+
+    # ピクセルが一致しないと、間違っていました。
+    if width1 != width2 or height1 != height2:
+        print("ピクセルが一致しません。")
+        return False
+        # set_error_message('ピクセルが一致しません。')
+
+    # グレーを変換
     img1_gray = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     img2_gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
@@ -86,10 +121,6 @@ def compare_images(image1_path, image2_path):
     contours = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = contours[0] if len(contours) == 2 else contours[1]
 
-    # Initial Mask image
-    mask = np.zeros(img1.shape, dtype='uint8')
-    filled_img = img2.copy()
-
     nb_differences = 0
 
     for c in contours:
@@ -100,62 +131,35 @@ def compare_images(image1_path, image2_path):
             x, y, w, h = cv2.boundingRect(c)
 
             # Adding rectangles, text and contours
-            cv2.rectangle(img1, (x, y), (x + w, y + h), rect_color, rect_size)
+            # cv2.rectangle(img1, (x, y), (x + w, y + h), rect_color, rect_size)
 
             cv2.rectangle(img2, (x, y), (x + w, y + h), rect_color, rect_size)
-            cv2.putText(img2, txt, (x, y + h + offset), cv2.FONT_HERSHEY_SIMPLEX,
-                        1, txt_color, txt_size)
+            cv2.putText(img2, txt, (x, y + h + offset), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 1, txt_color, txt_size)
 
-            cv2.drawContours(mask, [c], 0, contour_color1, -1)
-            cv2.putText(mask, txt, (x, y + h + offset), cv2.FONT_HERSHEY_SIMPLEX,
-                        1, txt_color, txt_size)
-
-            cv2.drawContours(filled_img, [c], 0, contour_color2, -1)
-            cv2.putText(filled_img, txt, (x, y + h + offset), cv2.FONT_HERSHEY_SIMPLEX,
-                        1, txt_color, txt_size)
-
-            # Saving images
+            # イメージ保存
             basename = os.path.basename(image1_path).split('.')[0]
-            image1 = "D:" + "/" + basename + "_image1.jpg"
-            image2 = "D:" + "/" + basename + "_image2.jpg"
-            maskimage = "D:" + "/" + basename + "_mask.jpg"
-            filled_image = "D:" + "/" + basename + "_filled_img.jpg"
+            # image1 = "E:" + "/" + basename + "_image1.jpg"
+            global input_browse
+            output_compare_dir = input_browse.split('.')[0] + "/" + load_config_content("Paths").get(
+                'output_compare_path', '')
+            if os.path.exists(output_compare_dir):
+                print('目録が存在します。')
+            else:
+                os.makedirs(output_compare_dir)
+            image2 = output_compare_dir + "/" + basename + load_config_content("Output").get('output_image', '')
 
-            cv2.imwrite(image1, img1)
+            # cv2.imwrite(image1, img1)
+            # 図を書き込み
             cv2.imwrite(image2, img2)
-            cv2.imwrite(maskimage, mask)
-            cv2.imwrite(filled_image, filled_img)
 
             nb_differences += 1
 
     print("\033[1;31;91m==> Number of differences =", nb_differences, '\033[0m')
 
-    # # 打开两张图片
-    # image1 = Image.open(image1_path)
-    # image2 = Image.open(image2_path)
-    #
-    # # 获取图片尺寸
-    # width1, height1 = image1.size
-    # width2, height2 = image2.size
-    #
-    # # 如果尺寸不同，则图片肯定不相同
-    # if width1 != width2 or height1 != height2:
-    #     return False
-    #
-    # # 逐像素比较
-    # for y in range(height1):
-    #     for x in range(width1):
-    #         pixel1 = image1.getpixel((x, y))
-    #         pixel2 = image2.getpixel((x, y))
-    #         if pixel1 != pixel2:
-    #             return False
-    #
-    # # 如果所有像素都相同，则图片相同
-    # return True
-
 
 class EventHandler:
     def __init__(self, parent):
+        self.evidence_file = None
         self.default_path = None
         self.config = None
         self.current_value = None
@@ -164,28 +168,25 @@ class EventHandler:
         self.timer_for_list = None
         self.pending_files_iterator = None
         self.pending_files = None
-        self.folder_after = None
         self.parent = parent
-        self.folder_before = None
         self.detail_table_timer = QTimer(self.parent)
         self.pic_no_cell = []
 
     def browse_button_click(self):
-        self.default_path = load_file_paths(self)
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        folder_before, _ = QFileDialog.getOpenFileName(self.parent, "Select Excel File",
-                                                       self.default_path.get('default_path', ''),
-                                                       "Excel Files (*.xlsx *.xls)",
-                                                       options=options)
-        if folder_before:
-            self.folder_before = folder_before
-            self.parent.input_browse.setText(self.folder_before)
+        evidence_file, _ = QFileDialog.getOpenFileName(self.parent, "エビデンスを選択",
+                                                       load_config_content("Paths").get('default_path', ''),
+                                                       "Excel Files (*.xlsx *.xls)", options=options)
+        if evidence_file:
+            self.evidence_file = evidence_file
+            self.parent.input_browse.setText(self.evidence_file)
             self.parent.exec_button.setDisabled(False)
+            global input_browse
+            input_browse = self.evidence_file
 
-    def confirm_and_execute(self):
-        wb = openpyxl.load_workbook(self.parent.input_browse.text())
-        sheet = wb.active
+    @staticmethod
+    def find_no_in_excel(wb, sheet):
         no_cells = []
         # 遍历A列中的所有单元格
         for row_idx, row in enumerate(sheet.iter_rows(min_row=1, max_row=sheet.max_row, min_col=1, max_col=1), start=1):
@@ -205,6 +206,17 @@ class EventHandler:
             print('no_cells', cell_info)
 
         wb.close()
+
+        return no_cells
+
+    def execute(self):
+        self.parent.status_label.setText('実行中...')
+        self.parent.update()
+        wb = openpyxl.load_workbook(self.parent.input_browse.text())
+        sheet = wb.active
+
+        # エクセルの中で、ケース番号を探す
+        no_cells = self.find_no_in_excel(wb, sheet)
 
         file_name = os.path.basename(self.parent.input_browse.text())
         new_name = str(file_name.split('.')[0]) + '.zip'
@@ -234,19 +246,18 @@ class EventHandler:
                 pic_col = xdr_from.childNodes[0].firstChild.data  # 获取标签间的数据
                 pic_row = xdr_from.childNodes[2].firstChild.data
 
-                embed = \
-                    anchor.getElementsByTagName('xdr:pic')[0].getElementsByTagName('xdr:blipFill')[
-                        0].getElementsByTagName(
-                        'a:blip')[0].getAttribute('r:embed')  # 获取属性
-
-                self.pic_no_cell.append({
-                    'value': embed,
-                    'row': pic_row,
-                    'column': pic_col
-                })
+                if anchor.getElementsByTagName('xdr:pic'):
+                    embed = \
+                        anchor.getElementsByTagName('xdr:pic')[0].getElementsByTagName('xdr:blipFill')[
+                            0].getElementsByTagName(
+                            'a:blip')[0].getAttribute('r:embed')  # 获取属性
+                    self.pic_no_cell.append({
+                        'value': embed,
+                        'row': pic_row,
+                        'column': pic_col
+                    })
             for pic_no_cell_info in self.pic_no_cell:
                 print('pic_no_cell', pic_no_cell_info)
-                # print('XXXXXXXXXXXXXX',img_dict.get(int(embed.replace('rId', '')))
                 # image_info[(int(row), int(col))] = img_dict.get(int(embed.replace('rId', '')), {}).get('img_path')
 
         sub_twoCellAnchor = element.getElementsByTagName("xdr:twoCellAnchor")
@@ -261,27 +272,20 @@ class EventHandler:
         file_list = os.listdir(pic_path)
         for file in file_list:
             filepath = os.path.join(pic_path, file)
-            print(filepath)
             img_index = int(re.findall(r'image(\d+)\.', filepath)[0])
             img_dict[img_index] = dict(img_index=img_index, img_path=filepath)
         print('..…..…..…..…..….', img_dict)
 
         for cell_info in no_cells:
-            print('ZZZ', cell_info)
             compare_list = []
             for pic_no_cell_info in self.pic_no_cell:
                 print('ZZZZZZ', pic_no_cell_info)
-                # print('CCC', cell_info['row'])
-                # print('CCC', str(int(pic_no_cell_info['row']) + 1))
                 if cell_info['row'] == int(pic_no_cell_info['row']) + 1:
-                    # if operator.eq(cell_info['row'], str(int(pic_no_cell_info['row']) + 1)):
                     compare_list.append(pic_no_cell_info['value'])
-                    print('XSXSXSXSX', compare_list)
             if len(compare_list) != 2:
                 # ERROR
                 print('compare_list_ERROR', compare_list)
             else:
-                # syori
                 print('compare_list_COMAPRE', compare_list)
                 image1_path = ''
                 image2_path = ''
@@ -293,10 +297,11 @@ class EventHandler:
                                 image1_path = img_dict[int(compare_list[i][3:])]['img_path']
                             if i == 1:
                                 image2_path = img_dict[int(compare_list[i][3:])]['img_path']
-                            print('img_dictimg_dictimg_dict', img_dict[int(compare_list[i][3:])])
+                            print('img_dict', img_dict[int(compare_list[i][3:])])
 
-                check_flag = compare_images(image1_path, image2_path)
-                print('checkResult:', check_flag)
+                compare_images(image1_path, image2_path)
+        # tmp_files_del()
+        self.parent.save_button.setDisabled(False)
 
     def app_exit(self):
         save_file_paths(self)
@@ -307,6 +312,10 @@ class MyApp(QWidget):
     def __init__(self):
         super().__init__()
 
+        self.button_file = None
+        self.input_file = None
+        self.label_file = None
+        self.label_browse = None
         self.button_browse = None
         self.input_browse = None
         self.status_label = None
@@ -345,28 +354,36 @@ class MyApp(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        self.top_group = QGroupBox("Excel File Section")
+        self.top_group = QGroupBox("選択")
         self.top_layout_1 = QHBoxLayout()
         self.top_layout_2 = QHBoxLayout()
         self.top_layout = QVBoxLayout()
-        self.label_before = QLabel('Evidence File')
+        self.label_browse = QLabel('エクセル')
         self.input_browse = QLineEdit()
         self.input_browse.setReadOnly(True)
-        self.button_browse = QPushButton('Browse')
+        self.button_browse = QPushButton('開く')
         self.button_browse.clicked.connect(self.event_handler.browse_button_click)
+        self.label_file = QLabel('仕様書')
+        self.input_file = QLineEdit()
+        self.input_file.setReadOnly(True)
+        self.button_file = QPushButton('開く')
+        self.button_file.setDisabled(True)
 
-        self.top_layout_1.addWidget(self.label_before)
+        self.top_layout_1.addWidget(self.label_browse)
         self.top_layout_1.addWidget(self.input_browse)
         self.top_layout_1.addWidget(self.button_browse)
+        self.top_layout_2.addWidget(self.label_file)
+        self.top_layout_2.addWidget(self.input_file)
+        self.top_layout_2.addWidget(self.button_file)
         self.top_layout.addLayout(self.top_layout_1)
         self.top_layout.addLayout(self.top_layout_2)
         self.top_group.setLayout(self.top_layout)
 
-        self.bottom_right_group = QGroupBox('Result Section')
+        self.bottom_right_group = QGroupBox('結果')
         self.bottom_right_layout = QVBoxLayout()
         self.table_widget = QTableWidget()
         self.table_widget.setColumnCount(3)
-        self.table_widget.setHorizontalHeaderLabels(['No.', 'Status', 'Note'])
+        self.table_widget.setHorizontalHeaderLabels(['番号', '状態', '備考'])
 
         self.bottom_right_layout.addWidget(self.table_widget)
         self.bottom_right_group.setLayout(self.bottom_right_layout)
@@ -374,14 +391,14 @@ class MyApp(QWidget):
         self.bottom_layout = QHBoxLayout()
         self.bottom_layout.addWidget(self.bottom_right_group)
 
-        self.button_group = QGroupBox("Operation Section")
+        self.button_group = QGroupBox("操作")
         self.button_layout = QHBoxLayout()
-        self.exec_button = QPushButton('Exec Button')
+        self.exec_button = QPushButton('実行')
         self.exec_button.setDisabled(True)
-        self.save_button = QPushButton('Save Button')
+        self.save_button = QPushButton('報告を開く')
         self.save_button.setDisabled(True)
-        self.exit_button = QPushButton('Exit Button')
-        self.exec_button.clicked.connect(self.event_handler.confirm_and_execute)
+        self.exit_button = QPushButton('退出')
+        self.exec_button.clicked.connect(self.event_handler.execute)
         # self.save_button.clicked.connect(self.event_handler.save_records)
         self.exit_button.clicked.connect(self.event_handler.app_exit)
 
@@ -390,11 +407,11 @@ class MyApp(QWidget):
         self.button_layout.addWidget(self.exit_button)
         self.button_group.setLayout(self.button_layout)
 
-        self.tips_group = QGroupBox("Status Section")
+        self.tips_group = QGroupBox("状態")
         self.tips_layout = QVBoxLayout()
         self.tips_layout_1 = QHBoxLayout()
         self.tips_layout_2 = QHBoxLayout()
-        self.status_label = QLabel('interface initialized...')
+        self.status_label = QLabel('画面初期化...')
         self.tips_label = QLabel('')
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimum(0)
@@ -413,12 +430,9 @@ class MyApp(QWidget):
         self.main_layout.addWidget(self.tips_group)
 
         self.setLayout(self.main_layout)
-        self.setWindowTitle('ExcelCheck Ver.1.0 PyQt5')
+        self.setWindowTitle('BIP Evidence-Tool Ver.1.0 PyQt5')
         self.setGeometry(100, 100, 800, 600)
         self.timer_init()
-
-        # self.event_handler.load_file_paths()
-        # self.event_handler.update_from_config_paths()
 
     def timer_init(self):
         self.timer = QTimer()
