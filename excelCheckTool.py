@@ -7,8 +7,11 @@ import re
 import xml.dom.minidom as xmldom
 import cv2
 import numpy as np
+import xlsxwriter
 from skimage.metrics import structural_similarity
 from PIL import Image, ImageDraw
+from tqdm import tqdm
+import pandas as pd
 
 import openpyxl
 from PyQt5.QtCore import QDateTime, Qt, QTimer, QCoreApplication
@@ -17,11 +20,18 @@ from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineE
 
 from datetime import datetime
 
-from openpyxl import load_workbook
-from PIL import Image, ImageGrab
+from openpyxl import load_workbook, Workbook
+from openpyxl.drawing.image import Image
+from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
+from openpyxl.drawing.xdr import XDRPositiveSize2D
+from openpyxl.utils.units import pixels_to_EMU
+
+# from PIL import Image, ImageGrab
 
 input_browse = ''
 content_for_table = ''
+col = 1
+row = 1
 
 
 def get_program_path():
@@ -155,6 +165,7 @@ def compare_images(image1_path, image2_path):
             nb_differences += 1
 
     print("\033[1;31;91m==> Number of differences =", nb_differences, '\033[0m')
+    return image2
 
 
 class EventHandler:
@@ -208,6 +219,36 @@ class EventHandler:
         wb.close()
 
         return no_cells
+
+    @staticmethod
+    def result_excel_ins(self, path, value):
+        output_path = input_browse.split('.')[0] + "/" + load_config_content("Output").get('output_result', '')
+        if os.path.exists(output_path):
+            wb = load_workbook(output_path)
+            sht = wb.active
+        else:
+            wb = Workbook()
+            sht = wb.active
+        img = Image(path)
+        # cnt = 81
+        # img.width, img.height = (12.7 * cnt, 4.7 * cnt)
+        cell = 'A' + str(int(row + 1))
+        sht[cell] = value
+        self.offset_img(self, img)
+        sht.add_image(img)
+        wb.save(output_path)
+        wb.close()
+
+    @staticmethod
+    def offset_img(self, img):
+        p2e = pixels_to_EMU
+        h, w = img.height, img.width
+        size = XDRPositiveSize2D(p2e(w), p2e(h))
+        global col
+        global row
+        marker = AnchorMarker(col=col, colOff=0, row=row, rowOff=0)
+        row = row + 63
+        img.anchor = OneCellAnchor(_from=marker, ext=size)
 
     def execute(self):
         self.parent.status_label.setText('実行中...')
@@ -299,7 +340,9 @@ class EventHandler:
                                 image2_path = img_dict[int(compare_list[i][3:])]['img_path']
                             print('img_dict', img_dict[int(compare_list[i][3:])])
 
-                compare_images(image1_path, image2_path)
+                compare_image_path = compare_images(image1_path, image2_path)
+                if compare_image_path:
+                    self.result_excel_ins(self, compare_image_path, cell_info['value'])
         # tmp_files_del()
         self.parent.save_button.setDisabled(False)
 
