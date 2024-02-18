@@ -11,7 +11,6 @@ import xlsxwriter
 from skimage.metrics import structural_similarity
 from PIL import Image, ImageDraw
 from tqdm import tqdm
-import pandas as pd
 
 import openpyxl
 from PyQt5.QtCore import QDateTime, Qt, QTimer, QCoreApplication
@@ -42,6 +41,7 @@ input_browse = ''
 content_for_table = ''
 col = 1
 row = 1
+data_status = True
 
 
 def get_program_path():
@@ -70,6 +70,20 @@ def save_file_paths(self):
 def set_error_message(self, content):
     QMessageBox.critical(self, "エラー", content)
     return False
+
+
+def show_alert():
+    app_for_alert = QApplication(sys.argv)
+    alert = QMessageBox()
+    alert.setWindowTitle("alert!")
+    alert.setText("aaaaaaaaaaaaaaaaaaaaa")
+    # alert.exec_()
+    alert.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+    result = alert.exec_()
+    if result == QMessageBox.Ok:
+        print("Ok~~~~~~~~~~~~")
+    elif result == QMessageBox.Cancel:
+        print("Cancle~~~~~~~~~~~~~~~")
 
 
 def tmp_files_del():
@@ -118,8 +132,9 @@ def compare_images(image1_path, image2_path):
 
     # ピクセルが一致しないと、間違っていました。
     if width1 != width2 or height1 != height2:
+        # show_alert()
         print("ピクセルが一致しません。")
-        return False
+        return ""
         # set_error_message('ピクセルが一致しません。')
 
     # グレーを変換
@@ -129,8 +144,8 @@ def compare_images(image1_path, image2_path):
     # Computation of the structural similarity index
     (score, diff) = structural_similarity(img1_gray, img2_gray, full=True)
 
-    print("\n\033[1;31;34mImage Similarity: {:.5f}%".format(score * 100))
-    print("Image Difference: {:.5f}%".format(100 - score * 100))
+    print("\n\033[1;31;34mイメージ に合わせること: {:.5f}%".format(score * 100))
+    print("イメージ 違うこと: {:.5f}%".format(100 - score * 100))
     print('\033[0m')
 
     diff = (diff * 255).astype("uint8")
@@ -142,6 +157,20 @@ def compare_images(image1_path, image2_path):
     contours = contours[0] if len(contours) == 2 else contours[1]
 
     nb_differences = 0
+
+    # イメージ保存
+    basename = os.path.basename(image1_path).split('.')[0]
+    # image1 = "E:" + "/" + basename + "_image1.jpg"
+    global input_browse
+    output_compare_dir = input_browse.split('.')[0] + "/" + load_config_content("Paths").get('output_compare_path', '')
+    if os.path.exists(output_compare_dir):
+        print('目録が存在します。')
+    else:
+        os.makedirs(output_compare_dir)
+        global col
+        global row
+        col = 1
+        row = 1
 
     for c in contours:
         area = cv2.contourArea(c)
@@ -156,16 +185,6 @@ def compare_images(image1_path, image2_path):
             cv2.rectangle(img2, (x, y), (x + w, y + h), rect_color, rect_size)
             cv2.putText(img2, txt, (x, y + h + offset), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 1, txt_color, txt_size)
 
-            # イメージ保存
-            basename = os.path.basename(image1_path).split('.')[0]
-            # image1 = "E:" + "/" + basename + "_image1.jpg"
-            global input_browse
-            output_compare_dir = input_browse.split('.')[0] + "/" + load_config_content("Paths").get(
-                'output_compare_path', '')
-            if os.path.exists(output_compare_dir):
-                print('目録が存在します。')
-            else:
-                os.makedirs(output_compare_dir)
             image2 = output_compare_dir + "/" + basename + load_config_content("Output").get('output_image', '')
 
             # cv2.imwrite(image1, img1)
@@ -261,8 +280,7 @@ class EventHandler:
         img.anchor = OneCellAnchor(_from=marker, ext=size)
 
     def execute(self):
-        self.parent.status_label.setText('実行中...')
-        self.parent.update()
+
         wb = openpyxl.load_workbook(self.parent.input_browse.text())
         sheet = wb.active
 
@@ -354,7 +372,20 @@ class EventHandler:
                 if compare_image_path:
                     self.result_excel_ins(self, compare_image_path, cell_info['value'])
         # tmp_files_del()
-        self.parent.save_button.setDisabled(False)
+        # self.parent.save_button.setDisabled(False)
+        result = QMessageBox.information(self.parent, '完成', "報告生成")
+        if result == QMessageBox.Ok:
+            self.parent.save_button.setDisabled(False)
+
+        self.parent.status_label.setText("実行完了...")
+        self.parent.update()
+
+    def records_open(self):
+        if input_browse:
+            try:
+                os.startfile(input_browse)
+            except Exception as e:
+                QMessageBox.critical(self.parent, 'error', str(e))
 
     def app_exit(self):
         save_file_paths(self)
@@ -452,7 +483,7 @@ class MyApp(QWidget):
         self.save_button.setDisabled(True)
         self.exit_button = QPushButton('退出')
         self.exec_button.clicked.connect(self.event_handler.execute)
-        # self.save_button.clicked.connect(self.event_handler.save_records)
+        self.save_button.clicked.connect(self.event_handler.records_open)
         self.exit_button.clicked.connect(self.event_handler.app_exit)
 
         self.button_layout.addWidget(self.exec_button)
