@@ -48,7 +48,7 @@ data_status = True
 
 def get_program_path():
     logging.warning("get_program_path, sys.argv[0] = %s", sys.argv[0])
-    return os.path.dirname(os.path.abspath(sys.argv[0]))
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def get_config_file_path():
@@ -192,7 +192,7 @@ def compare_images(image1_path, image2_path):
             cv2.rectangle(img2, (x, y), (x + w, y + h), rect_color, rect_size)
             cv2.putText(img2, txt, (x, y + h + offset), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 1, txt_color, txt_size)
 
-            image2 = output_compare_dir + basename + load_config_content("Output").get('output_image', '')
+            image2 = output_compare_dir + os.sep + basename + load_config_content("Output").get('output_image', '')
             logging.warning("compare_images, image2 = %s ", image2)
 
             # cv2.imwrite(image1, img1)
@@ -291,11 +291,15 @@ class EventHandler:
         img.anchor = OneCellAnchor(_from=marker, ext=size)
 
     def execute(self):
+        logging.warning("execute, report_path = %s", report_path)
         # 実行前に、レポートを削除することが必要です。
-        if os.path.exists(report_path):
-            os.remove(report_path)
-        else:
-            print('report_pathが存在しない。')
+        try:
+            if os.path.exists(report_path):
+                os.remove(report_path)
+            else:
+                print('report_pathが存在しない。')
+        except Exception as e:
+            QMessageBox.critical(self.parent, 'error', str(e))
 
         wb = openpyxl.load_workbook(self.parent.input_browse.text())
         sheet = wb.active
@@ -307,6 +311,7 @@ class EventHandler:
         new_name = str(file_name.split('.')[0]) + '.zip'
         dir_path = os.path.dirname(os.path.abspath(self.parent.input_browse.text()))
         new_path = os.path.join(dir_path, new_name)
+        logging.warning("execute, new_path = %s", new_path)
         if os.path.exists(new_path):
             os.remove(new_path)
         shutil.copyfile(self.parent.input_browse.text(), new_path)
@@ -323,6 +328,8 @@ class EventHandler:
         dom_obj = xmldom.parse(zip_dir + os.sep + 'xl' + os.sep + 'drawings' + os.sep + 'drawing1.xml')
         # 得到元素对象
         element = dom_obj.documentElement
+
+        logging.warning("execute, element = %s", element)
 
         def _f(subElementObj):
             self.pic_no_cell = []
