@@ -11,6 +11,7 @@ import xlsxwriter
 from skimage.metrics import structural_similarity
 from PIL import Image, ImageDraw
 from tqdm import tqdm
+import logging
 
 import openpyxl
 from PyQt5.QtCore import QDateTime, Qt, QTimer, QCoreApplication
@@ -38,6 +39,7 @@ from openpyxl.utils.units import pixels_to_EMU
 
 
 input_browse = ''
+report_path = ''
 content_for_table = ''
 col = 1
 row = 1
@@ -45,10 +47,12 @@ data_status = True
 
 
 def get_program_path():
+    logging.warning("get_program_path, sys.argv[0] = %s", sys.argv[0])
     return os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
 def get_config_file_path():
+    logging.warning("get_config_file_path, ini file = %s", os.path.join(get_program_path(), ".excel_config.ini"))
     return os.path.join(get_program_path(), ".excel_config.ini")
 
 
@@ -101,6 +105,7 @@ def tmp_files_del():
 
 
 def compare_images(image1_path, image2_path):
+    logging.warning("compare_images, image1_path = %s , image2_path = %s", image1_path, image2_path)
     # 色を設定
     green_color = (0, 255, 0)
     yellow_color = (0, 255, 255)
@@ -160,9 +165,11 @@ def compare_images(image1_path, image2_path):
 
     # イメージ保存
     basename = os.path.basename(image1_path).split('.')[0]
+    logging.warning("compare_images, basename = %s ", basename)
     # image1 = "E:" + "/" + basename + "_image1.jpg"
     global input_browse
     output_compare_dir = input_browse.split('.')[0] + "/" + load_config_content("Paths").get('output_compare_path', '')
+    logging.warning("compare_images, output_compare_dir = %s ", output_compare_dir)
     if os.path.exists(output_compare_dir):
         print('目録が存在します。')
     else:
@@ -185,7 +192,8 @@ def compare_images(image1_path, image2_path):
             cv2.rectangle(img2, (x, y), (x + w, y + h), rect_color, rect_size)
             cv2.putText(img2, txt, (x, y + h + offset), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 1, txt_color, txt_size)
 
-            image2 = output_compare_dir + "/" + basename + load_config_content("Output").get('output_image', '')
+            image2 = output_compare_dir + basename + load_config_content("Output").get('output_image', '')
+            logging.warning("compare_images, image2 = %s ", image2)
 
             # cv2.imwrite(image1, img1)
             # 図を書き込み
@@ -211,6 +219,7 @@ class EventHandler:
         self.parent = parent
         self.detail_table_timer = QTimer(self.parent)
         self.pic_no_cell = []
+        logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
     def browse_button_click(self):
         options = QFileDialog.Options()
@@ -224,6 +233,8 @@ class EventHandler:
             self.parent.exec_button.setDisabled(False)
             global input_browse
             input_browse = self.evidence_file
+            global report_path
+            report_path = self.evidence_file.split('.xlsx')[0] + load_config_content("Output").get('output_result', '')
 
     @staticmethod
     def find_no_in_excel(wb, sheet):
@@ -251,9 +262,9 @@ class EventHandler:
 
     @staticmethod
     def result_excel_ins(self, path, value):
-        output_path = input_browse.split('.')[0] + "/" + load_config_content("Output").get('output_result', '')
-        if os.path.exists(output_path):
-            wb = load_workbook(output_path)
+        # output_path = input_browse.split('.')[0] + "/" + load_config_content("Output").get('output_result', '')
+        if os.path.exists(report_path):
+            wb = load_workbook(report_path)
             sht = wb.active
         else:
             wb = Workbook()
@@ -265,7 +276,7 @@ class EventHandler:
         sht[cell] = value
         self.offset_img(self, img)
         sht.add_image(img)
-        wb.save(output_path)
+        wb.save(report_path)
         wb.close()
 
     @staticmethod
@@ -280,6 +291,11 @@ class EventHandler:
         img.anchor = OneCellAnchor(_from=marker, ext=size)
 
     def execute(self):
+        # 実行前に、レポートを削除することが必要です。
+        if os.path.exists(report_path):
+            os.remove(report_path)
+        else:
+            print('report_pathが存在しない。')
 
         wb = openpyxl.load_workbook(self.parent.input_browse.text())
         sheet = wb.active
@@ -381,9 +397,9 @@ class EventHandler:
         self.parent.update()
 
     def records_open(self):
-        if input_browse:
+        if report_path:
             try:
-                os.startfile(input_browse)
+                os.startfile(report_path)
             except Exception as e:
                 QMessageBox.critical(self.parent, 'error', str(e))
 
