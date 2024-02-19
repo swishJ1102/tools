@@ -48,14 +48,13 @@ row = 1
 data_status = True
 
 
+# Helper functions
 def get_program_path():
-    logging.warning("get_program_path, sys.argv[0] = %s", sys.argv[0])
     return os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
 def get_config_file_path():
-    logging.warning("get_config_file_path, ini file = %s", os.path.join(get_program_path(), "excel_config.ini"))
-    return os.path.join(get_program_path(), "excel_config.ini")
+    return os.path.join(get_program_path(), ".excel_config.ini")
 
 
 def load_config_content(tag):
@@ -64,17 +63,18 @@ def load_config_content(tag):
     return config[tag] if tag in config else {}
 
 
-def save_file_paths(self):
-    if self.parent.input_browse.text():
+def save_file_paths():
+    global input_browse
+    if input_browse:
         config = ConfigParser()
         config.read(get_config_file_path())
-        config.set('Paths', 'default_path', os.path.dirname(os.path.abspath(self.parent.input_browse.text())))
+        config.set('Paths', 'default_path', os.path.dirname(os.path.abspath(input_browse)))
         with open(get_config_file_path(), 'w') as configfile:
             config.write(configfile)
 
 
-def set_error_message(self, content):
-    QMessageBox.critical(self, "エラー", content)
+def set_error_message(content):
+    QMessageBox.critical(None, "エラー", content)
     return False
 
 
@@ -108,6 +108,7 @@ def tmp_files_del():
 
 def compare_images(image1_path, image2_path):
     logging.warning("compare_images, image1_path = %s , image2_path = %s", image1_path, image2_path)
+    image2 = ''
     # 色を設定
     green_color = (0, 255, 0)
     yellow_color = (0, 255, 255)
@@ -226,17 +227,16 @@ class EventHandler:
     def browse_button_click(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        evidence_file, _ = QFileDialog.getOpenFileName(self.parent, "エビデンスを選択",
+        evidence_file, _ = QFileDialog.getOpenFileName(None, "エビデンスを選択",
                                                        load_config_content("Paths").get('default_path', ''),
                                                        "Excel Files (*.xlsx *.xls)", options=options)
         if evidence_file:
-            self.evidence_file = evidence_file
-            self.parent.input_browse.setText(self.evidence_file)
+            self.parent.input_browse.setText(evidence_file)
             self.parent.exec_button.setDisabled(False)
             global input_browse
-            input_browse = self.evidence_file
+            input_browse = evidence_file
             global report_path
-            report_path = self.evidence_file.split('.xlsx')[0] + load_config_content("Output").get('output_result', '')
+            report_path = evidence_file.split('.xlsx')[0] + load_config_content("Output").get('output_result', '')
 
     @staticmethod
     def find_no_in_excel(wb, sheet):
@@ -299,34 +299,45 @@ class EventHandler:
         img.anchor = OneCellAnchor(_from=marker, ext=size)
 
     def execute(self):
+        global col, row, report_path, input_browse
+        col, row = 1, 1
+        if not input_browse:
+            set_error_message("ファイルが選択されていません。")
+            return
+        if not os.path.exists(input_browse):
+            set_error_message("選択されたファイルが見つかりません。")
+            return
+        if not os.path.exists(report_path):
+            set_error_message("レポートの保存先が見つかりません。")
+            return
         logging.warning("execute, report_path = %s", report_path)
         # 実行前に、レポートを削除することが必要です。
-        # try:
-        #     if os.path.exists(report_path):
-        #         os.remove(report_path)
-        #     else:
-        #         print('report_pathが存在しない。')
-        # except Exception as e:
-        #     QMessageBox.critical(self.parent, 'error', str(e))
         try:
             if os.path.exists(report_path):
                 os.remove(report_path)
             else:
                 print('report_pathが存在しない。')
-        except OSError as e:
-            if e.errno == errno.ENOENT:
-                print(f"ファイル '{report_path}', ファイルない")
-            elif e.errno == errno.EACCES:
-                print("errno.EACCES", stat.filemode(os.stat(report_path).st_mode))
-                print(f"ファイル '{report_path}', 権限ない")
-            else:
-                try:
-                    os.chmod(report_path, 0o777)
-                    os.remove(report_path)
-                    print(f"ファイル '{report_path}', 強制削除")
-                except Exception as e:
-                    print(f"ファイル '{report_path}', 削除できません")
-                    QMessageBox.critical(self.parent, 'error', str(e))
+        except Exception as e:
+            QMessageBox.critical(self.parent, 'error', str(e))
+        # try:
+        #     if os.path.exists(report_path):
+        #         os.remove(report_path)
+        #     else:
+        #         print('report_pathが存在しない。')
+        # except OSError as e:
+        #     if e.errno == errno.ENOENT:
+        #         print(f"ファイル '{report_path}', ファイルない")
+        #     elif e.errno == errno.EACCES:
+        #         print("errno.EACCES", stat.filemode(os.stat(report_path).st_mode))
+        #         print(f"ファイル '{report_path}', 権限ない")
+        #     else:
+        #         try:
+        #             os.chmod(report_path, 0o777)
+        #             os.remove(report_path)
+        #             print(f"ファイル '{report_path}', 強制削除")
+        #         except Exception as e:
+        #             print(f"ファイル '{report_path}', 削除できません")
+        #             QMessageBox.critical(self.parent, 'error', str(e))
 
         wb = openpyxl.load_workbook(self.parent.input_browse.text())
         sheet = wb.active
@@ -438,7 +449,7 @@ class EventHandler:
                 QMessageBox.critical(self.parent, 'error', str(e))
 
     def app_exit(self):
-        save_file_paths(self)
+        save_file_paths()
         self.parent.close()
 
 
