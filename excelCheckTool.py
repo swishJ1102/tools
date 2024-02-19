@@ -1,5 +1,7 @@
+import errno
 import os
 import shutil
+import stat
 import sys
 import zipfile
 from configparser import ConfigParser
@@ -48,12 +50,12 @@ data_status = True
 
 def get_program_path():
     logging.warning("get_program_path, sys.argv[0] = %s", sys.argv[0])
-    return os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
 def get_config_file_path():
-    logging.warning("get_config_file_path, ini file = %s", os.path.join(get_program_path(), ".excel_config.ini"))
-    return os.path.join(get_program_path(), ".excel_config.ini")
+    logging.warning("get_config_file_path, ini file = %s", os.path.join(get_program_path(), "excel_config.ini"))
+    return os.path.join(get_program_path(), "excel_config.ini")
 
 
 def load_config_content(tag):
@@ -263,21 +265,27 @@ class EventHandler:
     @staticmethod
     def result_excel_ins(self, path, value):
         # output_path = input_browse.split('.')[0] + "/" + load_config_content("Output").get('output_result', '')
-        if os.path.exists(report_path):
-            wb = load_workbook(report_path)
-            sht = wb.active
-        else:
-            wb = Workbook()
-            sht = wb.active
-        img = Image(path)
-        # cnt = 81
-        # img.width, img.height = (12.7 * cnt, 4.7 * cnt)
-        cell = 'A' + str(int(row + 1))
-        sht[cell] = value
-        self.offset_img(self, img)
-        sht.add_image(img)
-        wb.save(report_path)
-        wb.close()
+        try:
+            if os.path.exists(report_path):
+                wb = load_workbook(report_path)
+                sht = wb.active
+            else:
+                wb = Workbook()
+                sht = wb.active
+            img = Image(path)
+            # cnt = 81
+            # img.width, img.height = (12.7 * cnt, 4.7 * cnt)
+            cell = 'A' + str(int(row + 1))
+            sht[cell] = value
+            self.offset_img(self, img)
+            sht.add_image(img)
+            logging.warning("result_excel_ins, report_path = %s", report_path)
+            wb.save(report_path)
+            wb.close()
+            logging.warning("result_excel_ins, close")
+            os.chmod(report_path, 0o777)
+        except Exception as e:
+            print(f"ファイル'{report_path}'権限を設定することが成功。")
 
     @staticmethod
     def offset_img(self, img):
@@ -293,13 +301,32 @@ class EventHandler:
     def execute(self):
         logging.warning("execute, report_path = %s", report_path)
         # 実行前に、レポートを削除することが必要です。
+        # try:
+        #     if os.path.exists(report_path):
+        #         os.remove(report_path)
+        #     else:
+        #         print('report_pathが存在しない。')
+        # except Exception as e:
+        #     QMessageBox.critical(self.parent, 'error', str(e))
         try:
             if os.path.exists(report_path):
                 os.remove(report_path)
             else:
                 print('report_pathが存在しない。')
-        except Exception as e:
-            QMessageBox.critical(self.parent, 'error', str(e))
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                print(f"ファイル '{report_path}', ファイルない")
+            elif e.errno == errno.EACCES:
+                print("errno.EACCES", stat.filemode(os.stat(report_path).st_mode))
+                print(f"ファイル '{report_path}', 権限ない")
+            else:
+                try:
+                    os.chmod(report_path, 0o777)
+                    os.remove(report_path)
+                    print(f"ファイル '{report_path}', 強制削除")
+                except Exception as e:
+                    print(f"ファイル '{report_path}', 削除できません")
+                    QMessageBox.critical(self.parent, 'error', str(e))
 
         wb = openpyxl.load_workbook(self.parent.input_browse.text())
         sheet = wb.active
