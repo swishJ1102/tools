@@ -1,57 +1,108 @@
+import logging
 import os
+import re
 import shutil
 import sys
+import xml.dom.minidom as xmldom
 import zipfile
 from configparser import ConfigParser
-import re
-import xml.dom.minidom as xmldom
+
 import cv2
-import numpy as np
-from skimage.metrics import structural_similarity
-from PIL import Image, ImageDraw
-
 import openpyxl
-from PyQt5.QtCore import QDateTime, Qt, QTimer, QCoreApplication
-from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QProgressBar, \
-    QPushButton, QTableWidget, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QTableWidgetItem
+from PIL import Image
+from PyQt5.QtCore import QDateTime, Qt, QTimer
+from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QProgressBar, \
+    QPushButton, QTableWidget, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, \
+    QAction
+from openpyxl import load_workbook, Workbook
+from openpyxl.drawing.image import Image
+from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
+from openpyxl.drawing.xdr import XDRPositiveSize2D
+from openpyxl.utils.units import pixels_to_EMU
+from skimage.metrics import structural_similarity
 
-from datetime import datetime
+# from PIL import Image, ImageGrab
 
-from openpyxl import load_workbook
-from PIL import Image, ImageGrab
+# [Paths]
+# default_path = E:\
+# default_output_path = G:
+# output_compare_path = compare
+#
+# [Output]
+# output_image = _output.png
+# output_result = output.xlsx
 
 
+input_browse = ''
+report_path = ''
+content_for_table = ''
+col = 1
+row = 1
+data_status = True
+
+
+# Helper functions
 def get_program_path():
-    print('path start...')
     return os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
 def get_config_file_path():
-    print('config start...')
     return os.path.join(get_program_path(), ".excel_config.ini")
 
 
-def load_file_paths(self):
-    print('load start...')
-    self.config = ConfigParser()
-    self.config.read(get_config_file_path())
-    return self.config['Paths'] if 'Paths' in self.config else {}
+def load_config_content(tag):
+    config = ConfigParser()
+    config.read(get_config_file_path())
+    return config[tag] if tag in config else {}
 
 
-def save_file_paths(self):
-    if self.parent.input_browse.text():
+def save_file_paths():
+    global input_browse
+    if os.path.exists(input_browse):
         config = ConfigParser()
-        config['Paths'] = {'default_path': os.path.dirname(os.path.abspath(self.parent.input_browse.text()))}
+        config.read(get_config_file_path())
+        config.set('Paths', 'default_path', os.path.dirname(os.path.abspath(input_browse)))
         with open(get_config_file_path(), 'w') as configfile:
             config.write(configfile)
 
 
 def set_error_message(content):
-    QMessageBox.critical(QWidget, 'エラー', content)
+    QMessageBox.critical(None, "エラー", content)
     return False
 
 
+def show_alert():
+    app_for_alert = QApplication(sys.argv)
+    alert = QMessageBox()
+    alert.setWindowTitle("alert!")
+    alert.setText("aaaaaaaaaaaaaaaaaaaaa")
+    # alert.exec_()
+    alert.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+    result = alert.exec_()
+    if result == QMessageBox.Ok:
+        print("Ok~~~~~~~~~~~~")
+    elif result == QMessageBox.Cancel:
+        print("Cancle~~~~~~~~~~~~~~~")
+
+
+def tmp_files_del():
+    # 目録
+    if os.path.exists(input_browse.split('.')[0]):
+        shutil.rmtree(input_browse.split('.')[0])
+    else:
+        print('目録が存在しない。')
+
+    # ZIPファイル
+    if os.path.exists(input_browse.split('.')[0] + '.zip'):
+        os.remove(input_browse.split('.')[0] + '.zip')
+    else:
+        print('ZIPが存在しない。')
+
+
 def compare_images(image1_path, image2_path):
+    logging.warning("compare_images, image1_path = %s , image2_path = %s", image1_path, image2_path)
+    image2 = ''
+    # 色を設定
     green_color = (0, 255, 0)
     yellow_color = (0, 255, 255)
     cyan_color = (255, 255, 0)
@@ -65,34 +116,37 @@ def compare_images(image1_path, image2_path):
     contour_color1 = green_color
     contour_color2 = cyan_color
 
+    # 偏位量を設定
     offset = -15
 
-    # Loading images using OpencV
+    # イメージロード
     img1 = cv2.imread(image1_path)
     img2 = cv2.imread(image2_path)
 
     print("Comparing images:", image1_path, "and", image2_path)
 
-    # 获取图片尺寸
+    # イメージのサイズを取得
     width1 = img1.shape[0]
     height1 = img1.shape[1]
     width2 = img2.shape[0]
     height2 = img2.shape[1]
 
-    # 如果尺寸不同，则图片肯定不相同
+    # ピクセルが一致しないと、間違っていました。
     if width1 != width2 or height1 != height2:
+        # show_alert()
         print("ピクセルが一致しません。")
-        set_error_message("ピクセルが一致しません。")
+        return ""
+        # set_error_message('ピクセルが一致しません。')
 
-    # Switch to gray
+    # グレーを変換
     img1_gray = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     img2_gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
     # Computation of the structural similarity index
     (score, diff) = structural_similarity(img1_gray, img2_gray, full=True)
 
-    print("\n\033[1;31;34mImage Similarity: {:.5f}%".format(score * 100))
-    print("Image Difference: {:.5f}%".format(100 - score * 100))
+    print("\n\033[1;31;34mイメージ 合わせること: {:.5f}%".format(score * 100))
+    print("イメージ 違うこと: {:.5f}%".format(100 - score * 100))
     print('\033[0m')
 
     diff = (diff * 255).astype("uint8")
@@ -105,6 +159,22 @@ def compare_images(image1_path, image2_path):
 
     nb_differences = 0
 
+    # イメージ保存
+    basename = os.path.basename(image1_path).split('.')[0]
+    logging.warning("compare_images, basename = %s ", basename)
+    # image1 = "E:" + "/" + basename + "_image1.jpg"
+    global input_browse
+    output_compare_dir = input_browse.split('.')[0] + "/" + load_config_content("Paths").get('output_compare_path', '')
+    logging.warning("compare_images, output_compare_dir = %s ", output_compare_dir)
+    if os.path.exists(output_compare_dir):
+        print('目録が存在します。')
+    else:
+        os.makedirs(output_compare_dir)
+        global col
+        global row
+        col = 1
+        row = 1
+
     for c in contours:
         area = cv2.contourArea(c)
 
@@ -116,47 +186,24 @@ def compare_images(image1_path, image2_path):
             # cv2.rectangle(img1, (x, y), (x + w, y + h), rect_color, rect_size)
 
             cv2.rectangle(img2, (x, y), (x + w, y + h), rect_color, rect_size)
-            cv2.putText(img2, txt, (x, y + h + offset), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX,
-                        1, txt_color, txt_size)
+            cv2.putText(img2, txt, (x, y + h + offset), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 1, txt_color, txt_size)
 
-            # Saving images
-            basename = os.path.basename(image1_path).split('.')[0]
-            # image1 = "E:" + "/" + basename + "_image1.jpg"
-            image2 = "E:" + "/" + basename + "_image2.jpg"
+            image2 = output_compare_dir + os.sep + basename + load_config_content("Output").get('output_image', '')
+            logging.warning("compare_images, image2 = %s ", image2)
 
             # cv2.imwrite(image1, img1)
+            # 図を書き込み
             cv2.imwrite(image2, img2)
 
             nb_differences += 1
 
     print("\033[1;31;91m==> Number of differences =", nb_differences, '\033[0m')
-
-    # # 打开两张图片
-    # image1 = Image.open(image1_path)
-    # image2 = Image.open(image2_path)
-    #
-    # # 获取图片尺寸
-    # width1, height1 = image1.size
-    # width2, height2 = image2.size
-    #
-    # # 如果尺寸不同，则图片肯定不相同
-    # if width1 != width2 or height1 != height2:
-    #     return False
-    #
-    # # 逐像素比较
-    # for y in range(height1):
-    #     for x in range(width1):
-    #         pixel1 = image1.getpixel((x, y))
-    #         pixel2 = image2.getpixel((x, y))
-    #         if pixel1 != pixel2:
-    #             return False
-    #
-    # # 如果所有像素都相同，则图片相同
-    # return True
+    return image2
 
 
 class EventHandler:
     def __init__(self, parent):
+        self.evidence_file = None
         self.default_path = None
         self.config = None
         self.current_value = None
@@ -165,29 +212,38 @@ class EventHandler:
         self.timer_for_list = None
         self.pending_files_iterator = None
         self.pending_files = None
-        self.folder_after = None
         self.parent = parent
-        self.folder_before = None
         self.detail_table_timer = QTimer(self.parent)
         self.pic_no_cell = []
+        logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
     def browse_button_click(self):
-        print('browse begin...')
-        self.default_path = load_file_paths(self)
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        folder_before, _ = QFileDialog.getOpenFileName(self.parent, "Select Excel File",
-                                                       self.default_path.get('default_path', ''),
-                                                       "Excel Files (*.xlsx *.xls)",
-                                                       options=options)
-        if folder_before:
-            self.folder_before = folder_before
-            self.parent.input_browse.setText(self.folder_before)
+        evidence_file, _ = QFileDialog.getOpenFileName(None, "エビデンスを選択",
+                                                       load_config_content("Paths").get('default_path', ''),
+                                                       "Excel Files (*.xlsx *.xls)", options=options)
+        if os.path.exists(evidence_file):
+            self.parent.input_browse.setText(evidence_file)
             self.parent.exec_button.setDisabled(False)
+            self.parent.exec_action.setEnabled(True)
+            self.parent.save_button.setDisabled(True)
+            self.parent.open_action.setEnabled(False)
+            global input_browse
+            input_browse = evidence_file
+            global report_path
+            report_path = evidence_file.split('.xlsx')[0] + load_config_content("Output").get('output_result', '')
 
-    def execute(self):
-        wb = openpyxl.load_workbook(self.parent.input_browse.text())
-        sheet = wb.active
+    @staticmethod
+    def browse_button_released():
+        print("browse_button_released")
+
+    # global input_browse
+    # if os.path.exists(input_browse):
+    #     save_file_paths()
+
+    @staticmethod
+    def find_no_in_excel(wb, sheet):
         no_cells = []
         # 遍历A列中的所有单元格
         for row_idx, row in enumerate(sheet.iter_rows(min_row=1, max_row=sheet.max_row, min_col=1, max_col=1), start=1):
@@ -208,10 +264,100 @@ class EventHandler:
 
         wb.close()
 
+        return no_cells
+
+    @staticmethod
+    def result_excel_ins(self, path, value):
+        # output_path = input_browse.split('.')[0] + "/" + load_config_content("Output").get('output_result', '')
+        try:
+            if os.path.exists(report_path):
+                wb = load_workbook(report_path)
+                sht = wb.active
+            else:
+                wb = Workbook()
+                sht = wb.active
+            img = Image(path)
+            # cnt = 81
+            # img.width, img.height = (12.7 * cnt, 4.7 * cnt)
+            cell = 'A' + str(int(row + 1))
+            sht[cell] = value
+            self.offset_img(self, img)
+            sht.add_image(img)
+            logging.warning("result_excel_ins, report_path = %s", report_path)
+            wb.save(report_path)
+            wb.close()
+            logging.warning("result_excel_ins, close")
+            os.chmod(report_path, 0o777)
+        except Exception as e:
+            print(f"ファイル'{report_path}'権限を設定することが成功。")
+
+    @staticmethod
+    def offset_img(self, img):
+        p2e = pixels_to_EMU
+        h, w = img.height, img.width
+        size = XDRPositiveSize2D(p2e(w), p2e(h))
+        global col
+        global row
+        marker = AnchorMarker(col=col, colOff=0, row=row, rowOff=0)
+        row = row + 63
+        img.anchor = OneCellAnchor(_from=marker, ext=size)
+
+    def execute(self):
+        global input_browse
+        if os.path.exists(input_browse):
+            save_file_paths()
+        global col, row, report_path
+        col, row = 1, 1
+
+        if not input_browse:
+            set_error_message("ファイルが選択されていません。")
+            return
+        if not os.path.exists(input_browse):
+            set_error_message("選択されたファイルが見つかりません。")
+            return
+        # if not os.path.exists(report_path):
+        #     set_error_message("レポートの保存先が見つかりません。")
+        #     return
+        logging.warning("execute, report_path = %s", report_path)
+        # 実行前に、レポートを削除することが必要です。
+        try:
+            if os.path.exists(report_path):
+                os.remove(report_path)
+            else:
+                print('report_pathが存在しない。')
+        except Exception as e:
+            QMessageBox.critical(self.parent, 'error', str(e))
+        # try:
+        #     if os.path.exists(report_path):
+        #         os.remove(report_path)
+        #     else:
+        #         print('report_pathが存在しない。')
+        # except OSError as e:
+        #     if e.errno == errno.ENOENT:
+        #         print(f"ファイル '{report_path}', ファイルない")
+        #     elif e.errno == errno.EACCES:
+        #         print("errno.EACCES", stat.filemode(os.stat(report_path).st_mode))
+        #         print(f"ファイル '{report_path}', 権限ない")
+        #     else:
+        #         try:
+        #             os.chmod(report_path, 0o777)
+        #             os.remove(report_path)
+        #             print(f"ファイル '{report_path}', 強制削除")
+        #         except Exception as e:
+        #             print(f"ファイル '{report_path}', 削除できません")
+        #             QMessageBox.critical(self.parent, 'error', str(e))
+
+        wb = openpyxl.load_workbook(self.parent.input_browse.text())
+        sheet = wb.active
+
+        # エクセルの中で、ケース番号を探す
+        no_cells = self.find_no_in_excel(wb, sheet)
+
         file_name = os.path.basename(self.parent.input_browse.text())
         new_name = str(file_name.split('.')[0]) + '.zip'
         dir_path = os.path.dirname(os.path.abspath(self.parent.input_browse.text()))
         new_path = os.path.join(dir_path, new_name)
+        logging.warning("execute, new_path = %s", new_path)
         if os.path.exists(new_path):
             os.remove(new_path)
         shutil.copyfile(self.parent.input_browse.text(), new_path)
@@ -229,6 +375,8 @@ class EventHandler:
         # 得到元素对象
         element = dom_obj.documentElement
 
+        logging.warning("execute, element = %s", element)
+
         def _f(subElementObj):
             self.pic_no_cell = []
             for anchor in subElementObj:
@@ -241,7 +389,6 @@ class EventHandler:
                         anchor.getElementsByTagName('xdr:pic')[0].getElementsByTagName('xdr:blipFill')[
                             0].getElementsByTagName(
                             'a:blip')[0].getAttribute('r:embed')  # 获取属性
-
                     self.pic_no_cell.append({
                         'value': embed,
                         'row': pic_row,
@@ -290,17 +437,60 @@ class EventHandler:
                                 image2_path = img_dict[int(compare_list[i][3:])]['img_path']
                             print('img_dict', img_dict[int(compare_list[i][3:])])
 
-                check_flag = compare_images(image1_path, image2_path)
+                compare_image_path = compare_images(image1_path, image2_path)
+                if compare_image_path:
+                    self.result_excel_ins(self, compare_image_path, cell_info['value'])
+        # tmp_files_del()
+        # self.parent.save_button.setDisabled(False)
+        result = QMessageBox.information(self.parent, '完成', "報告生成")
+        if result == QMessageBox.Ok:
+            self.parent.save_button.setDisabled(False)
+            self.parent.open_action.setEnabled(True)
+            self.parent.exec_button.setDisabled(True)
+            self.parent.exec_action.setEnabled(False)
+
+        self.parent.status_label.setText("実行完了...")
+        self.parent.update()
+
+    def records_open(self):
+        if report_path:
+            try:
+                os.startfile(report_path)
+            except Exception as e:
+                QMessageBox.critical(self.parent, 'error', str(e))
 
     def app_exit(self):
-        save_file_paths(self)
-        self.parent.close()
+        result = QMessageBox.question(self.parent, 'exit', 'do you really wanna exit?',
+                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if result == QMessageBox.Yes:
+            save_file_paths()
+            self.parent.close()
+
+    @staticmethod
+    def app_info(self):
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle('バージョン　インフォメーション')
+        msg_box.setText('版号　　　：V1.0.0' +
+                        '\n作者　　　：wys' +
+                        '\n履歴内容　：ショットカット追加　２０２４０２２０')
+        x_pos = MyApp.geometry().center().x() - msg_box.width() / 2
+        y_pos = MyApp.geometry().center().y() - msg_box.height() / 2
+        msg_box.move(int(x_pos), int(y_pos))
+        msg_box.exec()
 
 
-class MyApp(QWidget):
+class MyApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        self.info_action = None
+        self.exit_action = None
+        self.open_action = None
+        self.exec_action = None
+        self.button_file = None
+        self.input_file = None
+        self.label_file = None
+        self.label_browse = None
         self.button_browse = None
         self.input_browse = None
         self.status_label = None
@@ -343,15 +533,24 @@ class MyApp(QWidget):
         self.top_layout_1 = QHBoxLayout()
         self.top_layout_2 = QHBoxLayout()
         self.top_layout = QVBoxLayout()
-        self.label_before = QLabel('エクセル')
+        self.label_browse = QLabel('エクセル')
         self.input_browse = QLineEdit()
         self.input_browse.setReadOnly(True)
         self.button_browse = QPushButton('開く')
         self.button_browse.clicked.connect(self.event_handler.browse_button_click)
+        self.button_browse.released.connect(self.event_handler.browse_button_released)
+        self.label_file = QLabel('仕様書')
+        self.input_file = QLineEdit()
+        self.input_file.setReadOnly(True)
+        self.button_file = QPushButton('開く')
+        self.button_file.setDisabled(True)
 
-        self.top_layout_1.addWidget(self.label_before)
+        self.top_layout_1.addWidget(self.label_browse)
         self.top_layout_1.addWidget(self.input_browse)
         self.top_layout_1.addWidget(self.button_browse)
+        self.top_layout_2.addWidget(self.label_file)
+        self.top_layout_2.addWidget(self.input_file)
+        self.top_layout_2.addWidget(self.button_file)
         self.top_layout.addLayout(self.top_layout_1)
         self.top_layout.addLayout(self.top_layout_2)
         self.top_group.setLayout(self.top_layout)
@@ -372,11 +571,11 @@ class MyApp(QWidget):
         self.button_layout = QHBoxLayout()
         self.exec_button = QPushButton('実行')
         self.exec_button.setDisabled(True)
-        self.save_button = QPushButton('保存')
+        self.save_button = QPushButton('報告を開く')
         self.save_button.setDisabled(True)
         self.exit_button = QPushButton('退出')
         self.exec_button.clicked.connect(self.event_handler.execute)
-        # self.save_button.clicked.connect(self.event_handler.save_records)
+        self.save_button.clicked.connect(self.event_handler.records_open)
         self.exit_button.clicked.connect(self.event_handler.app_exit)
 
         self.button_layout.addWidget(self.exec_button)
@@ -406,10 +605,40 @@ class MyApp(QWidget):
         self.main_layout.addWidget(self.button_group)
         self.main_layout.addWidget(self.tips_group)
 
+        central_widget = QWidget()
+        central_widget.setLayout(self.main_layout)
+        self.setCentralWidget(central_widget)
+
         self.setLayout(self.main_layout)
         self.setWindowTitle('BIP Evidence-Tool Ver.1.0 PyQt5')
         self.setGeometry(100, 100, 800, 600)
         self.timer_init()
+
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu('操作')
+        self.exec_action = QAction('実行', self)
+        self.exec_action.triggered.connect(self.event_handler.execute)
+        file_menu.addAction(self.exec_action)
+        self.exec_action.setEnabled(True)
+        self.exec_action.setShortcut('Ctrl+E')
+
+        self.open_action = QAction('報告を開く', self)
+        self.open_action.triggered.connect(self.event_handler.records_open)
+        file_menu.addAction(self.open_action)
+        self.open_action.setEnabled(False)
+        self.open_action.setShortcut('Alt+O')
+
+        self.exit_action = QAction('退出', self)
+        self.exit_action.triggered.connect(self.event_handler.app_exit)
+        file_menu.addAction(self.exit_action)
+        self.exit_action.setEnabled(True)
+        self.exit_action.setShortcut('Alt+Q')
+
+        info_menu = menu_bar.addMenu('インフォメーション')
+        self.info_action = QAction('バージョン', self)
+        self.info_action.triggered.connect(self.event_handler.app_info)
+        info_menu.addAction(self.info_action)
+        self.info_action.setShortcut('Alt+I')
 
     def timer_init(self):
         self.timer = QTimer()
