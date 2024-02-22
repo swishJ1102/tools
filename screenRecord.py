@@ -3,9 +3,9 @@ import sys
 import threading
 import time
 
-from PyQt5.QtCore import QDateTime, Qt, QTimer, QProcess, pyqtSignal
+from PyQt5.QtCore import QDateTime, Qt, QTimer, QProcess
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QMainWindow, QLabel, QHBoxLayout, \
-    QGroupBox, QMessageBox
+    QGroupBox, QMessageBox, QSystemTrayIcon, QStyle, QAction, QMenu
 from pynput import mouse, keyboard
 
 recording = []
@@ -43,9 +43,11 @@ def message_box_question(self, context, mode):
         if mode == 'Q':
             self.stop_recording_and_timer()
             # stop_recording()
+            self.tray_icon.hide()
             self.close()
     elif result == QMessageBox.No:
-        self.exec_button.setDisabled(False)
+        if mode == 'R':
+            self.exec_button.setDisabled(False)
 
 
 def show_tips(self, content):
@@ -144,7 +146,7 @@ def on_scroll(x, y, dx, dy):
 
 def start_recording():
     print("Press 'ESC' to finish recording")
-
+    # my_app.showMinimized()
     global keyboard_listener, mouse_listener, recording
     # 初期化動作集
     recording = []
@@ -164,6 +166,7 @@ def start_recording():
 
 
 def stop_recording():
+    # my_app.showNormal()
     if keyboard_listener:
         keyboard_listener.stop()
         print("Keyboard recording ended.")
@@ -242,6 +245,8 @@ def convert_to_pyautogui_script(recording):
             if step["vertical_direction"]:
                 output.write(f"pyautogui.scroll({step['vertical_direction'] * 200})\n")
 
+    # output.write(f"print('finish playing!')\n")
+
     print("Recording converted. Saved to 'play.py'")
 
 
@@ -249,6 +254,8 @@ class MyApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_datetime = QDateTime.currentDateTime().toString(Qt.ISODate)
+        self.tray_icon = QSystemTrayIcon(self)
+        self.init_tray_icon()
         self.timer = QTimer()
         self.timer_for_status = QTimer()
         self.scroll_offset = 0
@@ -278,6 +285,7 @@ class MyApp(QMainWindow):
         self.exit_button = QPushButton('退出')
         self.bottom_layout_1 = QHBoxLayout()
         self.bottom_layout_2 = QHBoxLayout()
+        self.bottom_layout = QVBoxLayout()
         self.bottom_group = QGroupBox("")
         self.init_ui()
 
@@ -298,14 +306,15 @@ class MyApp(QMainWindow):
 
         self.tips_layout_1.addWidget(self.status_label)
         self.tips_layout.addLayout(self.tips_layout_1)
-        self.tips_layout.addLayout(self.tips_layout_2)
+        # self.tips_layout.addLayout(self.tips_layout_2)
         self.tips_group.setLayout(self.tips_layout)
 
         self.exit_button.clicked.connect(self.exit)
         self.bottom_layout_1.addWidget(self.exit_button)
         self.bottom_layout_2.addWidget(self.tips_label)
-        self.bottom_group.setLayout(self.bottom_layout_1)
-        self.bottom_group.setLayout(self.bottom_layout_2)
+        self.bottom_layout.addLayout(self.bottom_layout_1)
+        self.bottom_layout.addLayout(self.bottom_layout_2)
+        self.bottom_group.setLayout(self.bottom_layout)
 
         self.main_layout.addWidget(self.exec_group)
         self.main_layout.addWidget(self.conv_group)
@@ -322,6 +331,24 @@ class MyApp(QMainWindow):
         self.setGeometry(750, 275, 400, 400)
         self.timer_init()
 
+    def init_tray_icon(self):
+        self.tray_icon.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
+        show_action = QAction("Show", self)
+        show_action.triggered.connect(self.show_normal)
+        exit_action = QAction("Exit", self)
+        exit_action.triggered.connect(self.exit_app)
+        tray_menu = QMenu()
+        tray_menu.addAction(show_action)
+        tray_menu.addAction(exit_action)
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.show()
+
+    def show_normal(self):
+        self.showNormal()
+
+    def exit_app(self):
+        self.exit()
+
     def timer_init(self):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_datetime)
@@ -329,6 +356,7 @@ class MyApp(QMainWindow):
 
     def update_datetime(self):
         self.current_datetime = QDateTime.currentDateTime().toString(Qt.ISODate)
+        self.tips_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.tips_label.setText(f'{self.current_datetime}')
 
     def execute(self):
@@ -339,7 +367,6 @@ class MyApp(QMainWindow):
         # process.startDetached('python', ['record.py'])
         show_tips(self, "画面の記録を開始いたします。")
         # show tips in motion
-
         message_box_question(self, "画面の記録を開始します。\n[Esc]を押して操作を終了します。", "R")
 
     def convert(self):
@@ -348,13 +375,17 @@ class MyApp(QMainWindow):
 
     def play(self):
         process = QProcess()
+        process.finished.connect(self.show_play_finished_message)
         process.startDetached('python', ['play.py'])
+
+    def show_play_finished_message(self):
+        QMessageBox.information(self, "メッセージ", "プレー完了。")
 
     def exit(self):
         message_box_question(self, "ツールを終了したいですか。", "Q")
 
     def start_recording_with_status_update(self):
-        self.status_label.setText("※画面の記録を開始します※[Esc]を押して操作を終了します※ご不明な点がございましたら、管理者にお問い合わせください※")
+        self.status_label.setText("※画面の記録を開始します※[Esc]を押して操作を終了します※ご不明な点がございましたら、管理者にお問い合わせください")
         self.scroll_offset = 0
         self.scroll_direction = 1
         # self.timer_for_status.timeout.connect(self.update_status_label)
@@ -362,10 +393,11 @@ class MyApp(QMainWindow):
         QTimer.singleShot(0, self.start_timer)
         threading.Thread(target=start_recording).start()
         # start_recording()
+        # self.setWindowState(Qt.WindowMinimized)
 
     def start_timer(self):
         self.timer_for_status.timeout.connect(self.update_status_label)
-        self.timer_for_status.start(1000)
+        self.timer_for_status.start(750)
 
     def stop_recording_and_timer(self):
         self.status_label.setText("画面の記録が終わりました。")
