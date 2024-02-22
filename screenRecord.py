@@ -1,13 +1,12 @@
-import sys
-import time
 import json
+import sys
+import threading
+import time
 
-import pyautogui
-from pynput import mouse, keyboard
-
-from PyQt5.QtCore import QDateTime, Qt, QTimer, QProcess
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QMainWindow, QAction, QLabel, QHBoxLayout, \
+from PyQt5.QtCore import QDateTime, Qt, QTimer, QProcess, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QMainWindow, QLabel, QHBoxLayout, \
     QGroupBox, QMessageBox
+from pynput import mouse, keyboard
 
 recording = []
 count = 0
@@ -38,8 +37,11 @@ def message_box_question(self, context, mode):
         if mode == 'R':
             # process = QProcess()
             # process.startDetached(start_recording())
-            start_recording()
+            # start_recording()
+            # threading.Thread(target=start_recording).start()
+            threading.Thread(target=self.start_recording_with_status_update).start()
         if mode == 'Q':
+            stop_recording()
             self.close()
 
 
@@ -56,8 +58,6 @@ def on_press(key):
         }
     except AttributeError:
         if key == keyboard.Key.esc:
-            print("Keyboard recording ended.")
-
             stop_recording()
             return False
 
@@ -139,9 +139,8 @@ def on_scroll(x, y, dx, dy):
 
 
 def start_recording():
-    print("Hold right click for 2 seconds then release to end the recording for mouse")
-    print("Click 'ESC' to end the recording for keyboard")
-    print("Both are needed to finish recording")
+    print("Press 'ESC' to finish recording")
+
     global keyboard_listener, mouse_listener, recording
     # 初期化動作集
     recording = []
@@ -161,10 +160,15 @@ def start_recording():
 
 
 def stop_recording():
-    keyboard_listener.stop()
-    mouse_listener.stop()
-    with open('recording.json', 'w') as f:
-        json.dump(recording, f)
+    if keyboard_listener:
+        keyboard_listener.stop()
+        print("Keyboard recording ended.")
+    if mouse_listener:
+        mouse_listener.stop()
+        print("Mouse recording ended.")
+    if recording:
+        with open('recording.json', 'w') as f:
+            json.dump(recording, f)
 
     # recording_for_convert = read_json_file()
     # convert_to_pyautogui_script(recording_for_convert)
@@ -242,6 +246,10 @@ class MyApp(QMainWindow):
         super().__init__()
         self.current_datetime = QDateTime.currentDateTime().toString(Qt.ISODate)
         self.timer = QTimer()
+        self.timer_for_status = QTimer()
+        self.scroll_offset = 0
+        self.scroll_direction = 1
+
         self.main_layout = QVBoxLayout()
 
         self.exec_layout = QHBoxLayout()
@@ -322,8 +330,9 @@ class MyApp(QMainWindow):
         # process = QProcess()
         # # process.start('python', ['record.py'])
         # process.startDetached('python', ['record.py'])
-
         show_tips(self, "画面の記録を開始いたします。")
+        # show tips in motion
+
         message_box_question(self, "画面の記録を開始します。\n[Esc]を押して操作を終了します。", "R")
 
     def convert(self):
@@ -336,6 +345,36 @@ class MyApp(QMainWindow):
 
     def exit(self):
         message_box_question(self, "ツールを終了したいですか。", "Q")
+
+    def start_recording_with_status_update(self):
+        self.status_label.setText("※画面の記録を開始します※[Esc]を押して操作を終了します※ご不明な点がございましたら、管理者にお問い合わせください※")
+        self.scroll_offset = 0
+        self.scroll_direction = 1
+        # self.timer_for_status.timeout.connect(self.update_status_label)
+        # self.timer_for_status.start(1000)
+        QTimer.singleShot(0, self.start_timer)
+        threading.Thread(target=start_recording).start()
+        # start_recording()
+
+    def start_timer(self):
+        self.timer_for_status.timeout.connect(self.update_status_label)
+        self.timer_for_status.start(1000)
+
+    def stop_timer(self):
+        self.timer_for_status.stop()
+
+    def update_status_label(self):
+        current_text = self.status_label.text()
+        displayed_text = current_text[self.scroll_offset:] + current_text[:self.scroll_offset]
+        self.status_label.setText(displayed_text)
+        self.scroll_offset = (self.scroll_offset + 1) % len(current_text)
+        # new_text = f'{current_text[1:]}{current_text[0]}'
+        # new_text = current_text[-1] + current_text[:-1]
+        # self.status_label.setText(new_text)
+        # if len(current_text) < 5:
+        #     self.scroll_direction *= -1
+        # elif len(current_text) > 10:
+        #     self.scroll_direction *= -1
 
 
 if __name__ == '__main__':
