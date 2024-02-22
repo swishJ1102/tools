@@ -41,8 +41,11 @@ def message_box_question(self, context, mode):
             # threading.Thread(target=start_recording).start()
             threading.Thread(target=self.start_recording_with_status_update).start()
         if mode == 'Q':
-            stop_recording()
+            self.stop_recording_and_timer()
+            # stop_recording()
             self.close()
+    elif result == QMessageBox.No:
+        self.exec_button.setDisabled(False)
 
 
 def show_tips(self, content):
@@ -58,7 +61,8 @@ def on_press(key):
         }
     except AttributeError:
         if key == keyboard.Key.esc:
-            stop_recording()
+            # stop_recording()
+            my_app.stop_recording_and_timer()
             return False
 
         json_object = {
@@ -272,7 +276,8 @@ class MyApp(QMainWindow):
         self.tips_group = QGroupBox("状態")
 
         self.exit_button = QPushButton('退出')
-        self.bottom_layout = QHBoxLayout()
+        self.bottom_layout_1 = QHBoxLayout()
+        self.bottom_layout_2 = QHBoxLayout()
         self.bottom_group = QGroupBox("")
         self.init_ui()
 
@@ -292,14 +297,15 @@ class MyApp(QMainWindow):
         self.play_group.setLayout(self.play_layout)
 
         self.tips_layout_1.addWidget(self.status_label)
-        self.tips_layout_2.addWidget(self.tips_label)
         self.tips_layout.addLayout(self.tips_layout_1)
         self.tips_layout.addLayout(self.tips_layout_2)
         self.tips_group.setLayout(self.tips_layout)
 
         self.exit_button.clicked.connect(self.exit)
-        self.bottom_layout.addWidget(self.exit_button)
-        self.bottom_group.setLayout(self.bottom_layout)
+        self.bottom_layout_1.addWidget(self.exit_button)
+        self.bottom_layout_2.addWidget(self.tips_label)
+        self.bottom_group.setLayout(self.bottom_layout_1)
+        self.bottom_group.setLayout(self.bottom_layout_2)
 
         self.main_layout.addWidget(self.exec_group)
         self.main_layout.addWidget(self.conv_group)
@@ -326,6 +332,7 @@ class MyApp(QMainWindow):
         self.tips_label.setText(f'{self.current_datetime}')
 
     def execute(self):
+        self.exec_button.setDisabled(True)
         # logging.warning("execute_for_py1, script = record.py")
         # process = QProcess()
         # # process.start('python', ['record.py'])
@@ -359,6 +366,11 @@ class MyApp(QMainWindow):
     def start_timer(self):
         self.timer_for_status.timeout.connect(self.update_status_label)
         self.timer_for_status.start(1000)
+
+    def stop_recording_and_timer(self):
+        self.status_label.setText("画面の記録が終わりました。")
+        stop_recording()
+        self.stop_timer()
 
     def stop_timer(self):
         self.timer_for_status.stop()
