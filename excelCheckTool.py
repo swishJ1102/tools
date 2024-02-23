@@ -40,6 +40,17 @@ col = 1
 row = 1
 data_status = True
 
+# button stylesheet
+button_stylesheet = 'QPushButton {background-color:rgba(255,178,0,100%);\
+                                                    color: white; \
+                                                      border-radius: 10px; \
+                                                       border: 2px groove gray; \
+                                                       border-style: outset;}\
+                                       QPushButton:hover{background-color:white;\
+                                        color: black;}\
+                                        QPushButton:pressed{background-color:rgb(85, 170, 255); \
+                                        border-style: inset; }'
+
 
 # Helper functions
 def get_program_path():
@@ -460,22 +471,34 @@ class EventHandler:
                 QMessageBox.critical(self.parent, 'error', str(e))
 
     def app_exit(self):
-        result = QMessageBox.question(self.parent, 'exit', 'do you really wanna exit?',
-                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("ツールメッセージ")
+        msg_box.setText("ツールを終了したいですか。")
+        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg_box.setDefaultButton(QMessageBox.No)
+        msg_box.button(QMessageBox.Yes).setText("はい(&Y)")
+        msg_box.button(QMessageBox.No).setText("いいえ(&N)")
+        result = msg_box.exec_()
+        # result = QMessageBox.question(self.parent, 'exit', 'do you really wanna exit?',
+        #                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        # result_button = QMessageBox.Yes if result == QMessageBox.Yes else QMessageBox.No
+        # result_button_text = "はい" if result == QMessageBox.Yes else "いいえ"
+        # result_button.setText(result_button_text)
         if result == QMessageBox.Yes:
             save_file_paths()
             self.parent.close()
 
     @staticmethod
     def app_info(self):
-        msg_box = QMessageBox()
+        msg_box = QMessageBox(self)
         msg_box.setWindowTitle('バージョン　インフォメーション')
         msg_box.setText('版号　　　：V1.0.0' +
                         '\n作者　　　：wys' +
                         '\n履歴内容　：ショットカット追加　２０２４０２２０')
-        x_pos = MyApp.geometry().center().x() - msg_box.width() / 2
-        y_pos = MyApp.geometry().center().y() - msg_box.height() / 2
-        msg_box.move(int(x_pos), int(y_pos))
+
+        # x_pos = self.geometry().center().x() - msg_box.width() / 2
+        # y_pos = self.geometry().center().y() - msg_box.height() / 2
+        # msg_box.move(int(x_pos), int(y_pos))
         msg_box.exec()
 
 
@@ -529,6 +552,7 @@ class MyApp(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
+        global button_stylesheet
         self.top_group = QGroupBox("選択")
         self.top_layout_1 = QHBoxLayout()
         self.top_layout_2 = QHBoxLayout()
@@ -560,6 +584,7 @@ class MyApp(QMainWindow):
         self.table_widget = QTableWidget()
         self.table_widget.setColumnCount(3)
         self.table_widget.setHorizontalHeaderLabels(['番号', '状態', '備考'])
+        self.table_widget.resizeColumnsToContents()
 
         self.bottom_right_layout.addWidget(self.table_widget)
         self.bottom_right_group.setLayout(self.bottom_right_layout)
@@ -571,9 +596,12 @@ class MyApp(QMainWindow):
         self.button_layout = QHBoxLayout()
         self.exec_button = QPushButton('実行')
         self.exec_button.setDisabled(True)
+        self.exec_button.setStyleSheet(button_stylesheet)
+        # self.exec_button.setStyleSheet("background-color: red")
         self.save_button = QPushButton('報告を開く')
         self.save_button.setDisabled(True)
         self.exit_button = QPushButton('退出')
+        self.exit_button.setStyleSheet("background-color: gray")
         self.exec_button.clicked.connect(self.event_handler.execute)
         self.save_button.clicked.connect(self.event_handler.records_open)
         self.exit_button.clicked.connect(self.event_handler.app_exit)
@@ -611,7 +639,7 @@ class MyApp(QMainWindow):
 
         self.setLayout(self.main_layout)
         self.setWindowTitle('BIP Evidence-Tool Ver.1.0 PyQt5')
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(500, 200, 800, 600)
         self.timer_init()
 
         menu_bar = self.menuBar()
@@ -652,6 +680,7 @@ class MyApp(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    app.setStyle('Windows')  # Windows , windowsvista , Fusion
     my_app = MyApp()
     my_app.show()
     sys.exit(app.exec_())
