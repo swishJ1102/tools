@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 import threading
 import time
@@ -49,7 +50,7 @@ button_stylesheet_cancel = 'QPushButton {height: 20px; width: 30px;\
 def message_box_question(self, context, mode):
     # mode [R: 記録, Q: 退出]
     msg_box = QMessageBox()
-    msg_box.setIcon(QMessageBox.Information)
+    msg_box.setIcon(QMessageBox.Question)
     msg_box.setWindowTitle("ツールメッセージ")
     msg_box.setText(context)
     msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -67,13 +68,25 @@ def message_box_question(self, context, mode):
             # threading.Thread(target=start_recording).start()
             threading.Thread(target=self.start_recording_with_status_update).start()
         if mode == 'Q':
-            self.stop_recording_and_timer()
-            # stop_recording()
+            # self.stop_recording_and_timer()
+            stop_recording()
             self.tray_icon.hide()
             self.close()
     elif result == QMessageBox.No:
         if mode == 'R':
             self.exec_button.setDisabled(False)
+
+
+def message_box_information(self, context):
+    msg_box = QMessageBox()
+    msg_box.setIcon(QMessageBox.Information)
+    msg_box.setWindowTitle("ツールメッセージ")
+    msg_box.setText(context)
+    msg_box.setStandardButtons(QMessageBox.Ok)
+    msg_box.setDefaultButton(QMessageBox.Ok)
+    msg_box.button(QMessageBox.Ok).setText("はい(&Y)")
+    msg_box.button(QMessageBox.Ok).setStyleSheet(button_stylesheet)
+    msg_box.exec_()
 
 
 def show_tips(self, content):
@@ -171,6 +184,7 @@ def on_scroll(x, y, dx, dy):
 
 
 def start_recording():
+    my_app.showMinimized()
     print("Press 'ESC' to finish recording")
     # my_app.showMinimized()
     global keyboard_listener, mouse_listener, recording
@@ -192,7 +206,8 @@ def start_recording():
 
 
 def stop_recording():
-    # my_app.showNormal()
+    # showfront
+    # my_app.show_front()
     if keyboard_listener:
         keyboard_listener.stop()
         print("Keyboard recording ended.")
@@ -403,19 +418,47 @@ class MyApp(QMainWindow):
     def convert(self):
         recording_for_convert = read_json_file()
         convert_to_pyautogui_script(recording_for_convert)
+        show_tips(self, "ファイルがコンバートしました。")
+
+    def show_front(self):
+        flags = self.windowFlags()
+        self.setWindowFlags(flags | Qt.WindowStaysOnTopHint)
+        self.show()
+        self.setWindowFlags(flags)
+        self.show()
 
     def play(self):
-        self.process = QProcess()
-        self.process.finished.connect(self.show_play_finished_message)
-        self.process.startDetached('python', ['play.py'])
-        if self.process.waitForFinished():
-            self.show_play_finished_message()
+        show_tips(self, "再現を始まる。")
+        self.showMinimized()
+        # self.process = QProcess()
+        # self.process.finished.connect(self.show_play_finished_message)
+        # self.process.startDetached('python', ['play.py'])
+        subp = subprocess.Popen(
+            'python ./play.py',
+            encoding='utf-8',
+            stdout=subprocess.PIPE
+        )
+        # out, err = subp.communicate()
+        # subp.wait()
+
+        while subp.poll() is None:
+            print("processing!!!!!!!!")
+        if subp.poll() == 0:
+            print("subp.poll()subp.poll()subp.poll()", subp.poll())
+            self.showNormal()
+            # self.show_front()
+            show_tips(self, "再現しました。")
+            # message_box_information(self, "再現完了。")
+        if subp.stdout.read() == 'finish playing!':
+            print("DONE DONE DONE")
+        # print('subp~~~~~~out : ', out)
+        # print('subp~~~~~~err : ', err)
+        # if out == 'finish playing!':
+        #     print('subp~~~~~~out handan : ', out)
+        #     self.show_play_finished_message()
         # if self.process.waitForStarted():
         #     self.process.waitForFinished(-1)
         #     self.show_play_finished_message()
-
-    def show_play_finished_message(self):
-        QMessageBox.information(self, "メッセージ", "プレー完了。")
 
     def exit(self):
         message_box_question(self, "ツールを終了したいですか。", "Q")
@@ -436,9 +479,11 @@ class MyApp(QMainWindow):
         self.timer_for_status.start(750)
 
     def stop_recording_and_timer(self):
-        self.status_label.setText("画面の記録が終わりました。")
-        stop_recording()
         self.stop_timer()
+        my_app.showNormal()
+        self.status_label.setText("画面の記録が終わりました。")
+        # message_box_information(self, "記録完了。")
+        stop_recording()
 
     def stop_timer(self):
         self.timer_for_status.stop()
