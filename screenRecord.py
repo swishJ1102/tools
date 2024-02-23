@@ -21,6 +21,30 @@ key_mappings = {
     "ctrl_r": "ctrl"
 }
 
+# default button stylesheet
+button_stylesheet = 'QPushButton {height: 20px; width: 30px;\
+                                            border: 1.5px solid #8f8f91;\
+                                            border-radius: 4px;\
+                                            background-color: qlineargradient(x1: 0.2, y1: 0.2, x2: 0.2, y2: 1,\
+                                            stop: 0 #f6f7fa, stop: 1 #dadbde);\
+                                            min-width: 50px;}\
+                    QPushButton:hover {background-color:white;\
+                                        color: black;}\
+                    QPushButton:pressed {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,\
+                                        stop: 0 #dadbde, stop: 1 #f6f7fa);}'
+
+# default button stylesheet
+button_stylesheet_cancel = 'QPushButton {height: 20px; width: 30px;\
+                                            border: 1.5px solid #8f8f91;\
+                                            border-radius: 4px;\
+                                            background-color: qlineargradient(x1: -1, y1: -1, x2: -1, y2: -0.5,\
+                                            stop: 0 #f6f7fa, stop: 1 #dadbde);\
+                                            min-width: 50px;}\
+                    QPushButton:hover {background-color:white;\
+                                        color: black;}\
+                    QPushButton:pressed {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,\
+                                        stop: 0 #dadbde, stop: 1 #f6f7fa);}'
+
 
 def message_box_question(self, context, mode):
     # mode [R: 記録, Q: 退出]
@@ -31,7 +55,9 @@ def message_box_question(self, context, mode):
     msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     msg_box.setDefaultButton(QMessageBox.No)
     msg_box.button(QMessageBox.Yes).setText("はい(&Y)")
+    msg_box.button(QMessageBox.Yes).setStyleSheet(button_stylesheet)
     msg_box.button(QMessageBox.No).setText("いいえ(&N)")
+    msg_box.button(QMessageBox.No).setStyleSheet(button_stylesheet_cancel)
     result = msg_box.exec_()
     if result == QMessageBox.Yes:
         if mode == 'R':
@@ -245,7 +271,7 @@ def convert_to_pyautogui_script(recording):
             if step["vertical_direction"]:
                 output.write(f"pyautogui.scroll({step['vertical_direction'] * 200})\n")
 
-    # output.write(f"print('finish playing!')\n")
+    output.write(f"print('finish playing!')\n")
 
     print("Recording converted. Saved to 'play.py'")
 
@@ -253,6 +279,7 @@ def convert_to_pyautogui_script(recording):
 class MyApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.process = None
         self.current_datetime = QDateTime.currentDateTime().toString(Qt.ISODate)
         self.tray_icon = QSystemTrayIcon(self)
         self.init_tray_icon()
@@ -266,14 +293,17 @@ class MyApp(QMainWindow):
         self.exec_layout = QHBoxLayout()
         self.exec_group = QGroupBox("操作")
         self.exec_button = QPushButton('記録を始めます！')
+        self.exec_button.setStyleSheet(button_stylesheet)
 
         self.conv_layout = QHBoxLayout()
         self.conv_group = QGroupBox("コンバート")
         self.conv_button = QPushButton('記録ファイルをコンバートしましょう～')
+        self.conv_button.setStyleSheet(button_stylesheet)
 
         self.play_layout = QHBoxLayout()
         self.play_group = QGroupBox("再現")
         self.play_button = QPushButton('プレー')
+        self.play_button.setStyleSheet(button_stylesheet)
 
         self.tips_label = QLabel('')
         self.status_label = QLabel('画面初期化...')
@@ -283,6 +313,7 @@ class MyApp(QMainWindow):
         self.tips_group = QGroupBox("状態")
 
         self.exit_button = QPushButton('退出')
+        self.exit_button.setStyleSheet(button_stylesheet_cancel)
         self.bottom_layout_1 = QHBoxLayout()
         self.bottom_layout_2 = QHBoxLayout()
         self.bottom_layout = QVBoxLayout()
@@ -374,9 +405,14 @@ class MyApp(QMainWindow):
         convert_to_pyautogui_script(recording_for_convert)
 
     def play(self):
-        process = QProcess()
-        process.finished.connect(self.show_play_finished_message)
-        process.startDetached('python', ['play.py'])
+        self.process = QProcess()
+        self.process.finished.connect(self.show_play_finished_message)
+        self.process.startDetached('python', ['play.py'])
+        if self.process.waitForFinished():
+            self.show_play_finished_message()
+        # if self.process.waitForStarted():
+        #     self.process.waitForFinished(-1)
+        #     self.show_play_finished_message()
 
     def show_play_finished_message(self):
         QMessageBox.information(self, "メッセージ", "プレー完了。")
@@ -423,6 +459,7 @@ class MyApp(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    app.setStyle('Fusion')  # Windows , windowsvista , Fusion
     my_app = MyApp()
     my_app.show()
     sys.exit(app.exec_())
