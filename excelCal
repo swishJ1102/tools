@@ -10,20 +10,30 @@ def find_files_with_word(folder_path, word):
                 files_with_word.append(file_path)
     return files_with_word
 
-def read_excel_and_write_new(filename):
+def write_to_master_excel(master_filename, data):
+    wb = openpyxl.load_workbook(master_filename)
+    ws = wb.active
+    for row in data:
+        ws.append(row)
+    wb.save(master_filename)
+
+def read_excel_and_collect_data(filename, keyword, master_data):
     wb = openpyxl.load_workbook(filename)
     for sheet_name in wb.sheetnames:
-        if 'file' in sheet_name.lower():
+        if keyword in sheet_name.lower():
             sheet = wb[sheet_name]
-            new_wb = openpyxl.Workbook()
-            new_sheet = new_wb.active
             for row in sheet.iter_rows(min_row=2):
                 data = [cell.value for cell in row]
-                new_sheet.append(data)
-            new_filename = f"new_{filename}"
-            new_wb.save(new_filename)
+                master_data.append(data)
 
 folder_path = 'your_folder_path'
-files = find_files_with_word(folder_path, 'file')
+master_filename = 'master_excel.xlsx'
+keyword = 'file'
+
+master_data = []
+
+files = find_files_with_word(folder_path, keyword)
 for file in files:
-    read_excel_and_write_new(file)
+    read_excel_and_collect_data(file, keyword, master_data)
+
+write_to_master_excel(master_filename, master_data)
