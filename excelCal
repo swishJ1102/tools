@@ -1,39 +1,47 @@
 import os
 import openpyxl
 
-def find_files_with_word(folder_path, word):
-    files_with_word = []
+def extract_data_from_objects_sheet(objects_sheet):
+    data = {}
+    for row in objects_sheet.iter_rows(min_row=2, values_only=True):
+        no = row[2]  # C列的值
+        path = row[4]  # E列的值
+        filename = row[26]  # AA列的值
+        data[no] = (path, filename)
+    return data
+
+def find_files_with_keyword(folder_path, keyword):
+    files_with_keyword = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
-            if file.endswith('.xlsx'):
-                file_path = os.path.join(root, file)
-                files_with_word.append(file_path)
-    return files_with_word
+            if keyword in file.lower() and file.endswith('.xlsx'):
+                files_with_keyword.append(os.path.join(root, file))
+    return files_with_keyword
 
-def write_to_master_excel(master_filename, data):
-    wb = openpyxl.load_workbook(master_filename)
-    ws = wb.active
-    for row in data:
-        ws.append(row)
-    wb.save(master_filename)
+def add_data_to_file_sheet(file_path, data):
+    wb = openpyxl.load_workbook(file_path)
+    for no, (path, filename) in data.items():
+        keyword = f'file no.{no}'
+        if keyword.lower() in [sheet.lower() for sheet in wb.sheetnames]:
+            file_sheet = wb[keyword]
+            for row in file_sheet.iter_rows(min_row=2):
+                row_data = [cell.value for cell in row]
+                if not all(row_data):
+                    row_data[0] = path
+                    row_data[1] = filename
+                    file_sheet.append(row_data)
+                    break
+    wb.save(file_path)
 
-def read_excel_and_collect_data(filename, keyword, master_data):
-    wb = openpyxl.load_workbook(filename)
-    for sheet_name in wb.sheetnames:
-        if keyword in sheet_name.lower():
-            sheet = wb[sheet_name]
-            for row in sheet.iter_rows(min_row=2):
-                data = [cell.value for cell in row]
-                master_data.append(data)
+def main(folder_path, objects_filename):
+    objects_wb = openpyxl.load_workbook(objects_filename)
+    objects_sheet = objects_wb['对象一览']
+    data = extract_data_from_objects_sheet(objects_sheet)
+
+    files = find_files_with_keyword(folder_path, 'file')
+    for file_path in files:
+        add_data_to_file_sheet(file_path, data)
 
 folder_path = 'your_folder_path'
-master_filename = 'master_excel.xlsx'
-keyword = 'file'
-
-master_data = []
-
-files = find_files_with_word(folder_path, keyword)
-for file in files:
-    read_excel_and_collect_data(file, keyword, master_data)
-
-write_to_master_excel(master_filename, master_data)
+objects_filename = 'your_objects_excel.xlsx'
+main(folder_path, objects_filename)
