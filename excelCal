@@ -1,0 +1,29 @@
+import os
+import openpyxl
+
+def find_files_with_word(folder_path, word):
+    files_with_word = []
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if file.endswith('.xlsx'):
+                file_path = os.path.join(root, file)
+                files_with_word.append(file_path)
+    return files_with_word
+
+def read_excel_and_write_new(filename):
+    wb = openpyxl.load_workbook(filename)
+    for sheet_name in wb.sheetnames:
+        if 'file' in sheet_name.lower():
+            sheet = wb[sheet_name]
+            new_wb = openpyxl.Workbook()
+            new_sheet = new_wb.active
+            for row in sheet.iter_rows(min_row=2):
+                data = [cell.value for cell in row]
+                new_sheet.append(data)
+            new_filename = f"new_{filename}"
+            new_wb.save(new_filename)
+
+folder_path = 'your_folder_path'
+files = find_files_with_word(folder_path, 'file')
+for file in files:
+    read_excel_and_write_new(file)
