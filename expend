@@ -1,32 +1,29 @@
 import os
 import openpyxl
 
-def find_called_files(folder_path, file_name, depth):
-    called_files = []
-    for file in os.listdir(folder_path):
-        if file.endswith('.xlsx'):
-            file_path = os.path.join(folder_path, file)
-            wb = openpyxl.load_workbook(file_path)
-            ws = wb.active
-            if file_name in ws:
-                called_files.append((file_name, depth))
-                for row in ws.iter_rows(values_only=True):
-                    for cell in row:
-                        if cell != file_name:
-                            called_files += find_called_files(folder_path, cell, depth + 1)
-            wb.close()
-    return called_files
+def traverse_directory(folder_path, parent='', level=0):
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if file.endswith('.xlsx'):
+                file_path = os.path.join(root, file)
+                excel_data = read_excel(file_path)
+                if parent != '':
+                    print('\t' * level + parent + ' ' + excel_data[0])
+                else:
+                    print(excel_data[0])
+                for child in excel_data[1:]:
+                    traverse_directory(folder_path, parent=excel_data[0] + ' ' + child, level=level+1)
 
-def main():
-    z_folder = 'path/to/z/folder'
-    output = []
-    for file in os.listdir(z_folder):
-        if file.endswith('.xlsx'):
-            called_files = find_called_files(z_folder, file.split('.')[0], 1)
-            for files in called_files:
-                output.append(' '.join(['\t'] * (files[1] - 1) + [files[0]]))
-    with open('output.txt', 'w') as f:
-        f.write('\n'.join(output))
+def read_excel(file_path):
+    result = []
+    wb = openpyxl.load_workbook(file_path)
+    ws = wb.active
+    for row in ws.iter_rows(values_only=True):
+        for cell in row:
+            result.append(cell)
+    wb.close()
+    return result
 
-if __name__ == "__main__":
-    main()
+# 测试函数
+folder_path = 'path/to/your/folder'
+traverse_directory(folder_path)
