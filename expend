@@ -8,11 +8,11 @@ def traverse_directory(folder_path, parent='', level=0):
                 file_path = os.path.join(root, file)
                 excel_data = read_excel(file_path)
                 if parent != '':
-                    print('\t' * level + parent + ' ' + excel_data[0])
+                    print('\t' * level + parent)
                 else:
-                    print(excel_data[0])
-                for child in excel_data[1:]:
-                    traverse_directory(folder_path, parent=excel_data[0] + ' ' + child, level=level+1)
+                    print(parent)
+                for child in excel_data:
+                    traverse_directory(folder_path, parent=child, level=level+1)
 
 def read_excel(file_path):
     result = []
