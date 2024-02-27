@@ -1,22 +1,32 @@
 import os
-from openpyxl import load_workbook
+import openpyxl
 
-def explore_folder(folder_path, level):
-    for filename in os.listdir(folder_path):
-        if filename.endswith('.xlsx'):
-            excel_path = os.path.join(folder_path, filename)
-            workbook = load_workbook(excel_path)
-            sheet = workbook.active
-            for row in sheet.iter_rows(min_row=2, max_col=1, values_only=True):
-                for cell in row:
-                    next_folder_path = os.path.join(folder_path, cell.value)
-                    if os.path.isdir(next_folder_path):
-                        print(f"{'  ' * level}{cell.value}")
-                        explore_folder(next_folder_path, level + 1)
-            workbook.close()
+def find_called_files(folder_path, file_name, depth):
+    called_files = []
+    for file in os.listdir(folder_path):
+        if file.endswith('.xlsx'):
+            file_path = os.path.join(folder_path, file)
+            wb = openpyxl.load_workbook(file_path)
+            ws = wb.active
+            if file_name in ws:
+                called_files.append((file_name, depth))
+                for row in ws.iter_rows(values_only=True):
+                    for cell in row:
+                        if cell != file_name:
+                            called_files += find_called_files(folder_path, cell, depth + 1)
+            wb.close()
+    return called_files
 
-# 初始文件夹路径
-initial_folder = 'z'
+def main():
+    z_folder = 'path/to/z/folder'
+    output = []
+    for file in os.listdir(z_folder):
+        if file.endswith('.xlsx'):
+            called_files = find_called_files(z_folder, file.split('.')[0], 1)
+            for files in called_files:
+                output.append(' '.join(['\t'] * (files[1] - 1) + [files[0]]))
+    with open('output.txt', 'w') as f:
+        f.write('\n'.join(output))
 
-# 初始层级为0
-explore_folder(initial_folder, 0)
+if __name__ == "__main__":
+    main()
