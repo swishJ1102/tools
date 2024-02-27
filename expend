@@ -1,24 +1,28 @@
-import os
-
-def traverse_folders(folder_path, depth=0):
-    # 获取当前文件夹下的所有文件和文件夹
-    contents = os.listdir(folder_path)
+def simulate_hierarchy_from_excel(excel_files):
+    hierarchy = {}  # 用字典来模拟文件夹层级关系
     
-    # 遍历当前文件夹下的所有内容
-    for item in contents:
-        # 拼接当前内容的完整路径
-        item_path = os.path.join(folder_path, item)
+    for excel_file in excel_files:
+        # 这里可以添加读取Excel文件并提取文件名的代码，这里简化为直接用文件名来模拟层级
+        file_name = excel_file.split('.')[0]  # 假设Excel文件名就是文件夹名
         
-        # 如果是文件夹，则递归调用该函数
-        if os.path.isdir(item_path):
-            print(item)  # 输出文件夹名
-            traverse_folders(item_path, depth + 1)  # 递归调用，层级加一
-        # 如果是文件，则输出文件名
-        elif os.path.isfile(item_path):
-            print("  " * depth + item)  # 输出文件名，根据层级添加缩进
+        current_level = hierarchy
+        path = ""
+        for char in file_name:
+            path += char
+            if path not in current_level:
+                current_level[path] = {}
+            current_level = current_level[path]
+    
+    # 递归遍历字典并输出层级关系
+    def print_hierarchy(level, indent=""):
+        for key in sorted(level.keys()):
+            print(indent + key)
+            print_hierarchy(level[key], indent + "  ")
+    
+    print_hierarchy(hierarchy)
 
-# 指定要遍历的文件夹路径
-folder_path = "z"
+# 假设excel_files是遍历到的Excel文件列表
+excel_files = ["a.xlsx", "b.xlsx", "c.xlsx", "g.xlsx"]
 
-# 调用函数开始遍历文件夹
-traverse_folders(folder_path)
+# 输出文件名的层级关系
+simulate_hierarchy_from_excel(excel_files)
