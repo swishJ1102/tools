@@ -1,29 +1,24 @@
 import os
-import openpyxl
 
-def traverse_directory(folder_path, parent='', level=0):
-    for root, dirs, files in os.walk(folder_path):
-        for file in files:
-            if file.endswith('.xlsx'):
-                file_path = os.path.join(root, file)
-                excel_data = read_excel(file_path)
-                if parent != '':
-                    print('\t' * level + parent)
-                else:
-                    print(parent)
-                for child in excel_data:
-                    traverse_directory(folder_path, parent=child, level=level+1)
+def traverse_folders(folder_path, depth=0):
+    # 获取当前文件夹下的所有文件和文件夹
+    contents = os.listdir(folder_path)
+    
+    # 遍历当前文件夹下的所有内容
+    for item in contents:
+        # 拼接当前内容的完整路径
+        item_path = os.path.join(folder_path, item)
+        
+        # 如果是文件夹，则递归调用该函数
+        if os.path.isdir(item_path):
+            print(item)  # 输出文件夹名
+            traverse_folders(item_path, depth + 1)  # 递归调用，层级加一
+        # 如果是文件，则输出文件名
+        elif os.path.isfile(item_path):
+            print("  " * depth + item)  # 输出文件名，根据层级添加缩进
 
-def read_excel(file_path):
-    result = []
-    wb = openpyxl.load_workbook(file_path)
-    ws = wb.active
-    for row in ws.iter_rows(values_only=True):
-        for cell in row:
-            result.append(cell)
-    wb.close()
-    return result
+# 指定要遍历的文件夹路径
+folder_path = "z"
 
-# 测试函数
-folder_path = 'path/to/your/folder'
-traverse_directory(folder_path)
+# 调用函数开始遍历文件夹
+traverse_folders(folder_path)
