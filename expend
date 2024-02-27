@@ -1,0 +1,32 @@
+import os
+from openpyxl import load_workbook
+
+def find_file_hierarchy(excel_file, folder_path, current_depth=1):
+    # 加载Excel文件
+    wb = load_workbook(excel_file)
+    ws = wb.active
+
+    # 读取文件名列表
+    filenames = [cell.value for cell in ws['A'] if cell.value]
+
+    # 遍历文件名列表
+    for filename in filenames:
+        hierarchy = [filename]
+        find_next_level(filename, folder_path, hierarchy, current_depth)
+        print("->".join(hierarchy))
+
+def find_next_level(filename, folder_path, hierarchy, current_depth):
+    current_folder_path = os.path.join(folder_path, filename)
+    if os.path.isdir(current_folder_path):
+        files = os.listdir(current_folder_path)
+        for file in files:
+            if os.path.isdir(os.path.join(current_folder_path, file)) and file != filename:
+                hierarchy.append(file)
+                find_next_level(file, current_folder_path, hierarchy, current_depth + 1)
+
+# 指定Excel文件和文件夹路径
+excel_file = "文件名.xlsx"
+folder_path = "z文件夹路径"
+
+# 查找文件层级关系
+find_file_hierarchy(excel_file, folder_path)
