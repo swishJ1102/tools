@@ -1,28 +1,126 @@
-def simulate_hierarchy_from_excel(excel_files):
-    hierarchy = {}  # 用字典来模拟文件夹层级关系
-    
-    for excel_file in excel_files:
-        # 这里可以添加读取Excel文件并提取文件名的代码，这里简化为直接用文件名来模拟层级
-        file_name = excel_file.split('.')[0]  # 假设Excel文件名就是文件夹名
-        
-        current_level = hierarchy
-        path = ""
-        for char in file_name:
-            path += char
-            if path not in current_level:
-                current_level[path] = {}
-            current_level = current_level[path]
-    
-    # 递归遍历字典并输出层级关系
-    def print_hierarchy(level, indent=""):
-        for key in sorted(level.keys()):
-            print(indent + key)
-            print_hierarchy(level[key], indent + "  ")
-    
-    print_hierarchy(hierarchy)
+import os
+import openpyxl
 
-# 假设excel_files是遍历到的Excel文件列表
-excel_files = ["a.xlsx", "b.xlsx", "c.xlsx", "g.xlsx"]
+current_col = 0
+next_level_flag = True
+next_level_num = 0
 
-# 输出文件名的层级关系
-simulate_hierarchy_from_excel(excel_files)
+key_mappings = {
+    "0": "A",
+    "1": "B",
+    "2": "C",
+    "3": "D",
+    "4": "E",
+    "5": "F",
+    "6": "G",
+    "7": "H",
+    "8": "I"
+}
+
+
+def find_excel_files(folder_path):
+    excel_files = []
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if file.endswith('.xlsx') or file.endswith('.xls'):
+                excel_files.append(os.path.join(root, file))
+    return excel_files
+
+
+def find_excel_files_with_word(folder_path, word):
+    excel_files = []
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if file == word + '.xlsx':
+                excel_files.append(os.path.join(root, file))
+    return excel_files
+
+
+def read_excel_for_filename(file_path, level):
+    file_path_list = []
+    # 加载工作簿
+    wb = openpyxl.load_workbook(file_path)
+    # 选择工作表
+    ws = wb['Sheet1']
+    for row in ws.iter_rows(min_row=0, values_only=True):
+        filename = row[int(level)]
+        if filename is None:
+            continue
+        file_path_list.append(filename)
+    return file_path_list
+
+
+def read_excel_for_context(folder_path):
+    path_list = []
+    # 加载工作簿
+    wb = openpyxl.load_workbook(folder_path)
+    # 选择工作表
+    ws = wb['Sheet1']
+    for row in ws.iter_rows(min_row=8, values_only=True):
+        no = row[1]
+        if no is None:
+            continue
+        path = row[2]  # C列的值
+        if path is None:
+            continue
+        sourcename = row[3]  # E列的值
+        path_list.append(path)
+    return path_list
+
+
+def write_to_excel(file_path, cell, value):
+    # 加载工作簿
+    wb = openpyxl.load_workbook(file_path)
+    # 选择工作表
+    ws = wb['Sheet1']
+    # 写入值到指定单元格
+    ws[cell] = value
+    # 保存工作簿
+    wb.save(file_path)
+    # 关闭工作簿
+    wb.close()
+
+
+def write_to_excel_next(file_path, sheet_name, row_index, cell, value):
+    # 加载工作簿
+    wb = openpyxl.load_workbook(file_path)
+    # 选择工作表
+    ws = wb[sheet_name]
+    ws.insert_rows(row_index)
+    # 写入值到指定单元格
+    ws[cell] = value
+    # 保存工作簿
+    wb.save(file_path)
+    # 关闭工作簿
+    wb.close()
+
+
+# 调用函数开始搜索
+folder_path = 'D:\\新建文件夹'  # 替换为实际文件夹路径
+excel_files = find_excel_files(folder_path)
+print('excel_files : ', excel_files)
+# 文件名列写入
+num = 1
+for file in excel_files:
+    # write_to_excel(file_path, 'Sheet1', 'A' + str(num), file.split('\\')[len(file.split('\\')) - 1].split('.')[0])
+    write_to_excel('D:aaa.xlsx', 'Sheet1', 'A' + str(num), file)
+    num += 1
+
+while next_level_flag is True:
+    file_path_list = read_excel_for_filename('D:aaa.xlsx', current_col)
+    print('file_path_list : ', file_path_list)
+    for file_path in file_path_list:
+        excel_files = find_excel_files_with_word(folder_path,
+                                                 file_path.split('\\')[len(file_path.split('\\')) - 1].split('.')[0])
+        if len(excel_files) == 0:
+            next_level_flag = False
+
+        print('file [' + file_path + '] is processing...')
+        path_list = read_excel_for_context(file_path)
+        print('path_list : ', path_list)
+        num = 1
+        for file_path_for_write in path_list:
+            print('file_path_for_write : ', file_path_for_write)
+            write_to_excel('D:aaa.xlsx', key_mappings[str(current_col + 1)] + str(num), file_path_for_write)
+            num += 1
+    current_col += 1
