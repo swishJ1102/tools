@@ -430,13 +430,17 @@ class MyApp(QMainWindow):
     def play(self):
         show_tips(self, "再現を始まる。")
         self.showMinimized()
+        st = subprocess.STARTUPINFO()
+        st.dwFlags = subprocess.STARTF_USESHOWWINDOW
+        st.wShowWindow = subprocess.SW_HIDE
         # self.process = QProcess()
         # self.process.finished.connect(self.show_play_finished_message)
         # self.process.startDetached('python', ['play.py'])
         subp = subprocess.Popen(
             'python ./play.py',
             encoding='utf-8',
-            stdout=subprocess.PIPE
+            stdout=subprocess.PIPE,
+            startupinfo=st
         )
         # out, err = subp.communicate()
         # subp.wait()
@@ -445,7 +449,8 @@ class MyApp(QMainWindow):
             print("processing!!!!!!!!")
         if subp.poll() == 0:
             print("subp.poll()subp.poll()subp.poll()", subp.poll())
-            self.showNormal()
+            self.show_normal()
+            # self.showNormal()
             # self.show_front()
             show_tips(self, "再現しました。")
             # message_box_information(self, "再現完了。")
