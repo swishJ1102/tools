@@ -174,11 +174,11 @@ with open(JAVA_PATH_ACTION_NAME, 'r') as file:
 import javalang
 
 def parse_methods(tree):
-    methods = []
+    methods = {}
 
     for path, node in tree:
         if isinstance(node, javalang.tree.MethodDeclaration):
-            methods.append(node)
+            methods[node.name] = node
 
     return methods
 
@@ -186,28 +186,29 @@ def parse_method_body(method_node):
     if not isinstance(method_node.body, javalang.tree.BlockStatement):
         return []
 
-    methods_in_body = []
+    called_methods = set()
     for statement in method_node.body.statements:
-        if isinstance(statement, javalang.tree.MethodDeclaration):
-            methods_in_body.append(statement)
-            methods_in_body.extend(parse_method_body(statement))
-    return methods_in_body
+        if isinstance(statement, javalang.tree.MethodInvocation):
+            called_methods.add(statement.member)
+
+    return called_methods
 
 def parse_java_file(java_code):
     tree = javalang.parse.parse(java_code)
     methods = parse_methods(tree)
 
-    all_methods = []
-    for method in methods:
-        all_methods.append(method)
-        all_methods.extend(parse_method_body(method))
+    method_calls = {}
+    for method_name, method_node in methods.items():
+        called_methods = parse_method_body(method_node)
+        method_calls[method_name] = called_methods
 
-    return all_methods
+    return method_calls
 
 with open('Example.java', 'r') as file:
     java_code = file.read()
 
-all_methods = parse_java_file(java_code)
+method_calls = parse_java_file(java_code)
 
-for method in all_methods:
-    print("Method Name:", method.name)
+for caller, called_methods in method_calls.items():
+    print("Method:", caller)
+    print("Calls:", called_methods)
