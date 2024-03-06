@@ -170,3 +170,44 @@ with open(JAVA_PATH_ACTION_NAME, 'r') as file:
             if WRITE_COUNT == 0:
                 OUTPUT_CONTEXT.append(java_action_path.split('\\')[len(java_action_path.split('\\')) - 1])
                 write_output(str(OUTPUT_CONTEXT))
+
+import javalang
+
+def parse_methods(tree):
+    methods = []
+
+    for path, node in tree:
+        if isinstance(node, javalang.tree.MethodDeclaration):
+            methods.append(node)
+
+    return methods
+
+def parse_method_body(method_node):
+    if not isinstance(method_node.body, javalang.tree.BlockStatement):
+        return []
+
+    methods_in_body = []
+    for statement in method_node.body.statements:
+        if isinstance(statement, javalang.tree.MethodDeclaration):
+            methods_in_body.append(statement)
+            methods_in_body.extend(parse_method_body(statement))
+    return methods_in_body
+
+def parse_java_file(java_code):
+    tree = javalang.parse.parse(java_code)
+    methods = parse_methods(tree)
+
+    all_methods = []
+    for method in methods:
+        all_methods.append(method)
+        all_methods.extend(parse_method_body(method))
+
+    return all_methods
+
+with open('Example.java', 'r') as file:
+    java_code = file.read()
+
+all_methods = parse_java_file(java_code)
+
+for method in all_methods:
+    print("Method Name:", method.name)
