@@ -43,10 +43,10 @@ data_status = True
 # button stylesheet
 button_stylesheet = 'QPushButton {background-color:rgba(255,178,0,100%);\
                                                     color: white; \
-                                                      border-radius: 10px; \
-                                                       border: 2px groove gray; \
-                                                       border-style: outset;}\
-                                       QPushButton:hover{background-color:white;\
+                                                    border-radius: 10px; \
+                                                    border: 2px groove gray; \
+                                                    border-style: outset;}\
+                    QPushButton:hover{background-color:white;\
                                         color: black;}\
                                         QPushButton:pressed{background-color:rgb(85, 170, 255); \
                                         border-style: inset; }'
@@ -488,19 +488,6 @@ class EventHandler:
             save_file_paths()
             self.parent.close()
 
-    @staticmethod
-    def app_info(self):
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle('バージョン　インフォメーション')
-        msg_box.setText('版号　　　：V1.0.0' +
-                        '\n作者　　　：wys' +
-                        '\n履歴内容　：ショットカット追加　２０２４０２２０')
-
-        # x_pos = self.geometry().center().x() - msg_box.width() / 2
-        # y_pos = self.geometry().center().y() - msg_box.height() / 2
-        # msg_box.move(int(x_pos), int(y_pos))
-        msg_box.exec()
-
 
 class MyApp(QMainWindow):
     def __init__(self):
@@ -596,7 +583,7 @@ class MyApp(QMainWindow):
         self.button_layout = QHBoxLayout()
         self.exec_button = QPushButton('実行')
         self.exec_button.setDisabled(True)
-        self.exec_button.setStyleSheet(button_stylesheet)
+        # self.exec_button.setStyleSheet(button_stylesheet)
         # self.exec_button.setStyleSheet("background-color: red")
         self.save_button = QPushButton('報告を開く')
         self.save_button.setDisabled(True)
@@ -661,12 +648,6 @@ class MyApp(QMainWindow):
         file_menu.addAction(self.exit_action)
         self.exit_action.setEnabled(True)
         self.exit_action.setShortcut('Alt+Q')
-
-        info_menu = menu_bar.addMenu('インフォメーション')
-        self.info_action = QAction('バージョン', self)
-        self.info_action.triggered.connect(self.event_handler.app_info)
-        info_menu.addAction(self.info_action)
-        self.info_action.setShortcut('Alt+I')
 
     def timer_init(self):
         self.timer = QTimer()
