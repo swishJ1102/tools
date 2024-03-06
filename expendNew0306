@@ -1,0 +1,172 @@
+import os
+import javalang
+
+PATH_NAME = 'cis'
+BASE_FOLDER = 'E:\\BIP\\1基線庫\\03source\\00.受領資料\\受領ソース\\商品\\' + PATH_NAME
+JAVA_PATH_NAME = 'java_' + PATH_NAME + '.txt'
+JAVA_SOURCE_NAME = 'java_source_' + PATH_NAME + '.txt'
+JAVA_PATH_ACTION_NAME = 'java_action_' + PATH_NAME + '.txt'
+CURRENT_ROW = 1
+CURRENT_COL = 1
+CODE_LINE_NO = 0
+LOG_FILE_PATH = 'class_file.log'
+WRITE_COUNT = 0
+FOLDS = False
+ARCHIVE_FILE_PATH = ''
+OUTPUT_TXT = 'G:\\' + PATH_NAME + '_output.txt'
+OUTPUT_CONTEXT = []
+
+
+def find_java_files(folder_path_to_find, word):
+    java_files = []
+    for root, dirs, files in os.walk(folder_path_to_find):
+        for file_con in files:
+            if file_con.endswith(word + '.java'):
+                java_files.append(os.path.join(root, file_con))
+    return java_files
+
+
+def base_file_create():
+    # フォールだにはJavaファイルすべてを取得する
+    java_files_path = find_java_files(BASE_FOLDER, '')
+    # PATHをtxtに書く
+    with open(JAVA_PATH_NAME, 'w') as output_file:
+        for java_files_for_write in java_files_path:
+            output_file.write(java_files_for_write + "\n")
+    # JAVA名をtxtに書く
+    with open(JAVA_PATH_NAME, 'r') as file:
+        with open(JAVA_SOURCE_NAME, 'w') as output_file:
+            for line in file:
+                output_file.write(line.split('\\')[len(line.split('\\')) - 1])
+
+
+def base_file_action_create():
+    action_files_path = find_java_files(BASE_FOLDER, 'Action')
+    # PATHをtxtに書く
+    with open(JAVA_PATH_ACTION_NAME, 'w') as output_file:
+        for java_files_for_write in action_files_path:
+            output_file.write(java_files_for_write + "\n")
+
+
+def base_file_to_find_in(word):
+    with open(JAVA_SOURCE_NAME, 'r') as file_to_find:
+        for line in file_to_find:
+            line = line.replace('\n', '')
+            if line == word + ".java":
+                return True
+    return False
+
+
+# # BASEファイルを作成
+# base_file_create()
+# # Actionファイルを作成
+# base_file_action_create()
+
+
+def find_specific_line_from_txt(txt_path, word, offset, code_line_no):
+    line_no = 0
+    if offset == '':
+        with open(txt_path, 'r', encoding="utf-8") as txt_context:
+            for specific_context in txt_context:
+                line_no += 1
+                if specific_context.find("import") >= 0 or specific_context.find(".") >= 0:
+                    continue
+                if specific_context.find(word) > 0:
+                    if code_line_no > line_no:
+                        return specific_context
+                    elif code_line_no <= line_no:
+                        print('code_line_no <= line_no')
+    else:
+        count_for_pix = 0
+        with open(txt_path, 'r', encoding="utf-8") as txt_context:
+            for specific_context in txt_context:
+                count_for_pix += 1
+                if count_for_pix == code_line_no + offset:
+                    return specific_context
+    return None
+
+
+# output txt
+def write_output(context):
+    with open(OUTPUT_TXT, 'a') as output_file:
+        output_file.write(context + "\n")
+
+
+def find_method_part(source):
+    source_path = find_java_files(BASE_FOLDER, source + "Impl")
+    if len(source_path) > 0:
+        # fd = open(source_path[0], "r", encoding="utf-8")
+        # treenode = javalang.parse.parse(fd.read())
+        # for path, node in treenode:
+        #     if isinstance(node, tree.ClassDeclaration):
+        #         pass
+        with open(source_path[0], "r", encoding='utf-8') as f:
+            tree = javalang.parse.parse(f.read())
+            classes = tree.types[0]
+            for i in classes.body:
+                try:
+                    if "public" in i.modifiers:
+                        i.body
+                        print(i.name)
+                except Exception as e:
+                    pass
+
+
+def find_method_context():
+    pass
+
+
+with open(JAVA_PATH_ACTION_NAME, 'r') as file:
+    for java_action_path in file:
+        CODE_LINE_NO = 0
+        WRITE_COUNT = 0
+        java_action_path = java_action_path.replace('\n', '')
+        if java_action_path:
+            print('java-path : [' + java_action_path + '] is reading...')
+            with open(java_action_path, 'r', encoding="utf-8") as java_file:
+                for java_code_line in java_file:
+                    OUTPUT_CONTEXT = []
+                    CODE_LINE_NO += 1
+                    java_code_line = java_code_line.replace('\n', '')
+
+                    if java_code_line.find("*") >= 0 or java_code_line.find("package") >= 0 \
+                            or java_code_line.find("import") >= 0 or java_code_line.find("//") >= 0 \
+                            or java_code_line.find("static") >= 0 or java_code_line.find("this") >= 0:
+                        continue
+                    if java_code_line.find(".") < 0:
+                        continue
+                    if java_code_line.find("session.") >= 0 or java_code_line.find("messageSource.") >= 0:
+                        continue
+
+                    key = java_code_line.split(".")[0].split(' ')[len(java_code_line.split(".")[0].split(' ')) - 1]
+
+                    key_line = find_specific_line_from_txt(java_action_path, key, '', CODE_LINE_NO)
+                    if key_line is None:
+                        continue
+                    key_to_find_in_base = ''
+                    if key_line.find('new') > 0:
+                        # GK010101_SearchTodoServiceBean searchTodoServiceBean
+                        # = new GK010101_SearchTodoServiceBean();
+                        key_to_find_in_base = key_line.split(' ')[len(key_line.split(' ')) - 5]
+                    else:
+                        # private GK010101_SearchTodoBean gk010101SearchTodoBean;
+                        key_to_find_in_base = key_line.split(" ")[len(key_line.split(" ")) - 2]
+
+                    if key_to_find_in_base.find('Bean') > 0 or key_to_find_in_base.find('Object') > 0 \
+                            or key_to_find_in_base.find('Mapper') > 0:
+                        continue
+
+                    IS_FLAG = base_file_to_find_in(key_to_find_in_base)
+
+                    if IS_FLAG is True:
+                        OUTPUT_CONTEXT.append(java_action_path.split('\\')[len(java_action_path.split('\\')) - 1])
+                        OUTPUT_CONTEXT.append(CODE_LINE_NO)
+                        OUTPUT_CONTEXT.append(key_to_find_in_base)
+                        OUTPUT_CONTEXT.append(key)
+                        WRITE_COUNT += 1
+                        find_method_part(key_to_find_in_base)
+                    if len(OUTPUT_CONTEXT) > 0:
+                        write_output(str(OUTPUT_CONTEXT))
+            if WRITE_COUNT == 0:
+                OUTPUT_CONTEXT.append(java_action_path.split('\\')[len(java_action_path.split('\\')) - 1])
+                write_output(str(OUTPUT_CONTEXT))
