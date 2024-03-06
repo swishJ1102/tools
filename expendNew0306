@@ -204,11 +204,25 @@ def parse_java_file(java_code):
 
     return method_calls
 
+def find_external_method_calls(java_code, method_calls):
+    external_calls = {}
+
+    for caller, called_methods in method_calls.items():
+        for method_name in called_methods:
+            if method_name not in external_calls:
+                external_calls[method_name] = set()
+
+            if method_name in method_calls:
+                external_calls[method_name].add(caller)
+
+    return external_calls
+
 with open('Example.java', 'r') as file:
     java_code = file.read()
 
 method_calls = parse_java_file(java_code)
+external_calls = find_external_method_calls(java_code, method_calls)
 
-for caller, called_methods in method_calls.items():
-    print("Method:", caller)
-    print("Calls:", called_methods)
+for external_method, callers in external_calls.items():
+    print("Method:", external_method)
+    print("Called by:", callers)
