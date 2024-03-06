@@ -173,56 +173,47 @@ with open(JAVA_PATH_ACTION_NAME, 'r') as file:
 
 import javalang
 
-def parse_methods(tree):
-    methods = {}
+def parse_package(tree):
+    package_name = tree.package.name if tree.package else None
+    print("Package Name:", package_name)
 
-    for path, node in tree:
-        if isinstance(node, javalang.tree.MethodDeclaration):
-            methods[node.name] = node
+def parse_imports(tree):
+    import_statements = [imp.path for imp in tree.imports]
+    print("Import Statements:", import_statements)
 
-    return methods
+def parse_classes(tree):
+    for class_def in tree.types:
+        print("\nClass Name:", class_def.name)
 
-def parse_method_body(method_node):
-    if not isinstance(method_node.body, javalang.tree.BlockStatement):
-        return []
+        # Fields
+        for field in class_def.fields:
+            print("Field:", field.type, field.declarators[0].name)
 
-    called_methods = set()
-    for statement in method_node.body.statements:
+        # Methods
+        for method in class_def.methods:
+            print("\nMethod Name:", method.name)
+            print("Parameters:", [(param.type, param.name) for param in method.parameters])
+
+            # Exception Handling
+            if method.throws:
+                print("Throws:", [exception.name for exception in method.throws])
+
+            # Method Body
+            if method.body:
+                parse_method_body(method.body)
+
+def parse_method_body(body):
+    for statement in body.statements:
         if isinstance(statement, javalang.tree.MethodInvocation):
-            called_methods.add(statement.member)
-
-    return called_methods
+            print("Method Call:", statement.member)
 
 def parse_java_file(java_code):
     tree = javalang.parse.parse(java_code)
-    methods = parse_methods(tree)
-
-    method_calls = {}
-    for method_name, method_node in methods.items():
-        called_methods = parse_method_body(method_node)
-        method_calls[method_name] = called_methods
-
-    return method_calls
-
-def find_external_method_calls(java_code, method_calls):
-    external_calls = {}
-
-    for caller, called_methods in method_calls.items():
-        for method_name in called_methods:
-            if method_name not in external_calls:
-                external_calls[method_name] = set()
-
-            if method_name in method_calls:
-                external_calls[method_name].add(caller)
-
-    return external_calls
+    parse_package(tree)
+    parse_imports(tree)
+    parse_classes(tree)
 
 with open('Example.java', 'r') as file:
     java_code = file.read()
 
-method_calls = parse_java_file(java_code)
-external_calls = find_external_method_calls(java_code, method_calls)
-
-for external_method, callers in external_calls.items():
-    print("Method:", external_method)
-    print("Called by:", callers)
+parse_java_file(java_code)
