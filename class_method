@@ -1,0 +1,81 @@
+import os
+import javalang
+
+def find_method_calls(java_code):
+    method_calls = []
+
+    tree = javalang.parse.parse(java_code)
+    for path, node in tree:
+        if isinstance(node, javalang.tree.MethodInvocation):
+            method_calls.append((path, node))
+
+    return method_calls
+
+def find_class_name(java_code, method_call_path):
+    for _, node in method_call_path:
+        if isinstance(node, javalang.tree.ClassCreator):
+            return node.type.name
+        elif isinstance(node, javalang.tree.MethodInvocation):
+            class_name = find_class_name(java_code, node.qualifier)
+            if class_name:
+                return class_name
+        elif isinstance(node, javalang.tree.MemberReference):
+            return node.qualifier
+
+def find_method_calls_recursive(java_code, method_calls, class_name):
+    method_call_details = []
+
+    for path, node in method_calls:
+        qualified_class_name = find_class_name(java_code, path)
+        if qualified_class_name == class_name:
+            method_call_details.append((qualified_class_name, node.member, path))
+        else:
+            continue
+
+    return method_call_details
+
+def get_file_paths(directory):
+    file_paths = []
+    for root, directories, files in os.walk(directory):
+        for file_name in files:
+            if file_name.endswith('.java'):
+                file_path = os.path.join(root, file_name)
+                file_paths.append(file_path)
+    return file_paths
+
+def analyze_code(java_code, class_name):
+    method_calls = find_method_calls(java_code)
+    method_call_details = find_method_calls_recursive(java_code, method_calls, class_name)
+    
+    return method_call_details
+
+def get_method_line(method_node):
+    return method_node.position[0] if hasattr(method_node, 'position') else None
+
+def get_method_call_line(method_call_node):
+    return method_call_node.position[0] if hasattr(method_call_node, 'position') else None
+
+def analyze_project(directory, class_name):
+    file_paths = get_file_paths(directory)
+    code_call_relations = {}
+
+    for file_path in file_paths:
+        with open(file_path, 'r') as file:
+            java_code = file.read()
+            method_call_details = analyze_code(java_code, class_name)
+            if method_call_details:
+                code_call_relations[file_path] = method_call_details
+
+    return code_call_relations
+
+directory = 'path_to_your_java_project_directory'
+class_name = 'abc'
+code_call_relations = analyze_project(directory, class_name)
+
+for file_path, method_call_details in code_call_relations.items():
+    print("File:", file_path)
+    for class_name, method_name, path in method_call_details:
+        print("  Class:", class_name)
+        print("  Method:", method_name)
+        print("  Path:", path)
+        print()
