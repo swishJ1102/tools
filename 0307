@@ -1,0 +1,42 @@
+import javalang
+
+def find_method_calls(tree, parent_class_name, line_number):
+    method_calls = []
+    for path, node in tree:
+        if isinstance(node, javalang.tree.MethodInvocation):
+            method_calls.append((parent_class_name, node.member, line_number))
+
+    return method_calls
+
+def parse_java_file(file_path):
+    with open(file_path, 'r') as file:
+        source = file.read()
+    tree = javalang.parse.parse(source)
+    return tree
+
+def find_instance_method_calls(file_paths):
+    all_method_calls = []
+
+    for file_path in file_paths:
+        tree = parse_java_file(file_path)
+        for path, node in tree:
+            if isinstance(node, javalang.tree.ClassDeclaration):
+                class_name = node.name
+                for _, member_node in node.members:
+                    if isinstance(member_node, javalang.tree.MethodDeclaration):
+                        method_name = member_node.name
+                        start_line = member_node.position.line
+                        method_calls = find_method_calls(member_node.body, class_name, start_line)
+                        all_method_calls.extend(method_calls)
+                    elif isinstance(member_node, javalang.tree.ConstructorDeclaration):
+                        start_line = member_node.position.line
+                        method_calls = find_method_calls(member_node.body, class_name, start_line)
+                        all_method_calls.extend(method_calls)
+
+    return all_method_calls
+
+# Example usage
+file_paths = ["example1.java", "example2.java"]  # List of Java file paths
+method_calls = find_instance_method_calls(file_paths)
+for call in method_calls:
+    print("Class: {}, Method: {}, Line: {}".format(call[0], call[1], call[2]))
