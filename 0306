@@ -1,0 +1,67 @@
+import javalang
+
+class MethodCall:
+    def __init__(self, caller, callee):
+        self.caller = caller
+        self.callee = callee
+
+def parse_method_calls(source):
+    method_calls = []
+    tree = javalang.parse.parse(source)
+    
+    for path, node in tree.filter(javalang.tree.MethodInvocation):
+        method_call = MethodCall(path[-2], node.member)
+        method_calls.append(method_call)
+    
+    return method_calls
+
+def build_call_graph(source):
+    method_calls = parse_method_calls(source)
+    call_graph = {}
+    
+    for method_call in method_calls:
+        caller = method_call.caller
+        callee = method_call.callee
+        
+        if caller not in call_graph:
+            call_graph[caller] = []
+        call_graph[caller].append(callee)
+    
+    return call_graph
+
+def find_method_calls(source, target_method):
+    call_graph = build_call_graph(source)
+    method_calls = []
+    
+    def dfs(method):
+        if method in call_graph:
+            for callee in call_graph[method]:
+                method_calls.append((method, callee))
+                dfs(callee)
+    
+    dfs(target_method)
+    return method_calls
+
+# Example usage
+java_source = """
+public class MyClass {
+    public void methodA() {
+        methodB();
+        methodC();
+    }
+
+    public void methodB() {
+        methodC();
+    }
+
+    public void methodC() {
+        // Some code
+    }
+}
+"""
+
+target_method = 'methodA'
+
+method_calls = find_method_calls(java_source, target_method)
+for caller, callee in method_calls:
+    print(f"{caller} calls {callee}")
