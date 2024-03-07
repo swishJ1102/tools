@@ -1,10 +1,10 @@
 import javalang
 
-def find_method_calls(tree, parent_class_name, line_number):
+def find_method_calls(tree, class_name, line_number):
     method_calls = []
     for path, node in tree:
         if isinstance(node, javalang.tree.MethodInvocation):
-            method_calls.append((parent_class_name, node.member, line_number))
+            method_calls.append((class_name, node.member, line_number))
 
     return method_calls
 
@@ -22,7 +22,7 @@ def find_instance_method_calls(file_paths):
         for path, node in tree:
             if isinstance(node, javalang.tree.ClassDeclaration):
                 class_name = node.name
-                for _, member_node in node.members:
+                for member_node in node.body:
                     if isinstance(member_node, javalang.tree.MethodDeclaration):
                         method_name = member_node.name
                         start_line = member_node.position.line
