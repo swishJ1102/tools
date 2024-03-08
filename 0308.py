@@ -126,7 +126,7 @@ def parse_method_body(body, method_name):
 
             if base_file_to_find_in(key_to_find_in_base) is True:
                 OUTPUT_LIST = []
-                count_method_lines(key_to_find_in_base, statement.expression.member)
+                # count_method_lines(key_to_find_in_base, statement.expression.member)
                 print("\nMethod Call:", statement.expression.member)
                 print("Method Call qualifier:", statement.expression.qualifier)
                 print("Method Call LineNo.:", statement.expression.position.line)
