@@ -17,13 +17,14 @@ def count_method_lines(file_path, method_name):
         
         if in_method:
             total_method_lines += 1
-            if line.strip() and not re.match(r'\s*//', line) and not re.match(r'\s*/\*', line) and not re.match(r'\s*\*', line):  # Exclude empty lines and comment lines
+            if line.strip() and not line.strip().startswith("//") and not line.strip().startswith("/*") and not line.strip().startswith("*"):  # Exclude empty lines and comment lines
                 code_lines += 1
         
         if re.match(r'.*\s*{}\(.*\)'.format(method_name), line):
             in_method = True
         elif in_method and re.match(r'\s*}}\s*', line):
             in_method = False
+            break
     
     return total_method_lines, code_lines
 
