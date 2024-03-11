@@ -3,7 +3,6 @@ import os
 def count_lines_of_code(file_path):
     total_lines = 0
     method_lines = {}
-    inside_method = False
     current_method_name = None
     current_method_lines = 0
     
@@ -12,23 +11,17 @@ def count_lines_of_code(file_path):
             # 统计总行数
             total_lines += 1
             
-            # 如果在方法内，统计方法行数
-            if inside_method:
-                current_method_lines += 1
-                
             # 检查是否进入了新方法
             if line.strip().startswith("public") or line.strip().startswith("private") or line.strip().startswith("protected"):
-                inside_method = True
                 current_method_name = line.split("(")[0].split()[-1]
-                current_method_lines = 1
+                current_method_lines = 0
                 
-            # 检查是否离开了方法
-            if line.strip() == "}":
-                if inside_method:
+            # 统计方法行数
+            if current_method_name is not None:
+                current_method_lines += 1
+                if line.strip() == "}":
                     method_lines[current_method_name] = current_method_lines
-                    inside_method = False
                     current_method_name = None
-                    current_method_lines = 0
                     
     return total_lines, method_lines
 
