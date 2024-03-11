@@ -1,38 +1,48 @@
-import re
+import os
 
-def count_method_lines(file_path, method_name):
+def count_lines_of_code(file_path):
+    total_lines = 0
+    method_lines = {}
+    inside_method = False
+    current_method_name = None
+    current_method_lines = 0
+    
     with open(file_path, 'r') as file:
-        lines = file.readlines()
-        
-    total_method_lines = 0
-    code_lines = 0
-    in_method = False
-    
-    for line in lines:
-        # Remove single line comments
-        line = re.sub(r'//.*', '', line)
-        
-        # Remove multi-line comments
-        line = re.sub(r'/\*.*?\*/', '', line)
-        
-        if in_method:
-            total_method_lines += 1
-            if line.strip() and not line.strip().startswith("//") and not line.strip().startswith("/*") and not line.strip().startswith("*"):  # Exclude empty lines and comment lines
-                code_lines += 1
-        
-        if re.match(r'\s*{}\(.*\)'.format(method_name), line):
-            in_method = True
-            total_method_lines += 1
-        elif in_method:
-            if line.strip() == "" or line.strip().startswith("}"):
-                in_method = False
-                break
-    
-    return total_method_lines, code_lines
+        for line in file:
+            # 统计总行数
+            total_lines += 1
+            
+            # 如果在方法内，统计方法行数
+            if inside_method:
+                current_method_lines += 1
+                
+            # 检查是否进入了新方法
+            if line.strip().startswith("public") or line.strip().startswith("private") or line.strip().startswith("protected"):
+                inside_method = True
+                current_method_name = line.split("(")[0].split()[-1]
+                current_method_lines = 1
+                
+            # 检查是否离开了方法
+            if line.strip() == "}":
+                if inside_method:
+                    method_lines[current_method_name] = current_method_lines
+                    inside_method = False
+                    current_method_name = None
+                    current_method_lines = 0
+                    
+    return total_lines, method_lines
 
-file_path = 'YourJavaFile.java'
-method_name = 'yourMethodName'
+def main():
+    java_files = [file for file in os.listdir() if file.endswith(".java")]
+    
+    for java_file in java_files:
+        total_lines, method_lines = count_lines_of_code(java_file)
+        print(f"File: {java_file}")
+        print(f"Total lines: {total_lines}")
+        print("Method lines:")
+        for method, lines in method_lines.items():
+            print(f"{method}: {lines}")
+        print()
 
-total_method_lines, code_lines = count_method_lines(file_path, method_name)
-print("Total lines in method '{}': {}".format(method_name, total_method_lines))
-print("Number of non-empty lines in method '{}' (excluding comments and empty lines): {}".format(method_name, code_lines))
+if __name__ == "__main__":
+    main()
