@@ -27,6 +27,9 @@ def count_lines_of_code(file_path):
                 
             # 检查是否进入了新方法
             if line.startswith("public") or line.startswith("private") or line.startswith("protected"):
+                if current_method_name is not None:
+                    method_lines[current_method_name] = current_method_lines
+                    method_code_lines[current_method_name] = current_method_code_lines
                 current_method_name = line.split("(")[0].split()[-1]
                 current_method_lines = 0
                 current_method_code_lines = 0
