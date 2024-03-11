@@ -15,13 +15,15 @@ def count_method_lines(file_path, method_name):
         # Remove multi-line comments
         line = re.sub(r'/\*.*?\*/', '', line)
         
-        if re.match(r'\s*{}\(.*\)\s*{{'.format(method_name), line):
+        # Check if the line contains method definition
+        if re.match(r'\s*.*\s*{}\(.*\)\s*{{.*'.format(method_name), line):
             in_method = True
+            total_method_lines += 1
         elif in_method and re.match(r'\s*}}\s*', line):
             in_method = False
         elif in_method and line.strip() != "":
             total_method_lines += 1
-            if not re.match(r'\s+', line):  # Exclude empty lines
+            if not re.match(r'\s*//', line) and not re.match(r'\s*/\*', line) and not re.match(r'\s*\*', line) and not re.match(r'\s+', line):  # Exclude empty lines and comment lines
                 code_lines += 1
     
     return total_method_lines, code_lines
