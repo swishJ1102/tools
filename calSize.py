@@ -5,6 +5,7 @@ def count_lines_of_code(file_path):
     method_lines = {}
     current_method_name = None
     current_method_lines = 0
+    brace_count = 0
     
     with open(file_path, 'r') as file:
         for line in file:
@@ -15,13 +16,18 @@ def count_lines_of_code(file_path):
             if line.strip().startswith("public") or line.strip().startswith("private") or line.strip().startswith("protected"):
                 current_method_name = line.split("(")[0].split()[-1]
                 current_method_lines = 0
+                brace_count = 0
                 
             # 统计方法行数
             if current_method_name is not None:
                 current_method_lines += 1
-                if line.strip() == "}":
-                    method_lines[current_method_name] = current_method_lines
-                    current_method_name = None
+                if "{" in line:
+                    brace_count += 1
+                if "}" in line:
+                    brace_count -= 1
+                    if brace_count == 0:
+                        method_lines[current_method_name] = current_method_lines
+                        current_method_name = None
                     
     return total_lines, method_lines
 
