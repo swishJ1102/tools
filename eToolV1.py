@@ -1,21 +1,13 @@
-import logging
 import os
-import re
+import os
 import shutil
 import subprocess
 import sys
-import xml.dom.minidom as xmldom
-import zipfile
 from configparser import ConfigParser
 
-import cv2
-import openpyxl
-from PIL import Image
-from PyQt5 import QtWidgets
 from PyQt5.QtCore import QDateTime, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QProgressBar, \
-    QPushButton, QTableWidget, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, \
-    QAction, QTableWidgetItem, QHeaderView
+    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow
 
 FOLDER_LOG = "LOG"
 FOLDER_COVERAGE = "カバレッジ"
@@ -30,7 +22,7 @@ EXCEL_TEST = "テスト仕様書.xlsx"
 EXCEL_COMPARE = "手修正確認.xlsx"
 EXCEL_COVERAGE = "カバー.xlsx"
 
-input_browse = ''
+INPUT_BROWSE = ''
 # button stylesheet
 BUTTON_STYLESHEET = 'QPushButton {background-color:rgba(255,178,0,100%);\
                                                     color: white; \
@@ -43,8 +35,13 @@ BUTTON_STYLESHEET = 'QPushButton {background-color:rgba(255,178,0,100%);\
                                         border-style: inset; }'
 
 
+# Helper functions
+def get_program_path():
+    return os.path.dirname(os.path.abspath(sys.argv[0]))
+
+
 def get_config_file_path():
-    return os.path.join(get_program_path(), ".excel_config.ini")
+    return os.path.join(get_program_path(), ".eTool_config.ini")
 
 
 def load_config_content(tag):
@@ -54,12 +51,12 @@ def load_config_content(tag):
 
 
 def save_file_paths():
-    global input_browse
-    if os.path.exists(input_browse):
+    global INPUT_BROWSE
+    if os.path.exists(INPUT_BROWSE):
         config = ConfigParser()
         config.read(get_config_file_path())
-        config.set('Paths', 'default_path', os.path.dirname(os.path.abspath(input_browse)))
-        with open(get_config_file_path(), 'w') as configfile:
+        config.set('Paths', 'default_path', os.path.dirname(os.path.abspath(INPUT_BROWSE)))
+        with open(get_config_file_path(), 'w', encoding='utf-8') as configfile:
             config.write(configfile)
 
 
@@ -85,7 +82,7 @@ def is_null_check(self):
 
 
 # todo
-def set_message_box(self, message_type, title, context):
+def set_message_box(message_type, title, context):
     if message_type == 'WARNING':
         QMessageBox.warning(None, title, context)
     if message_type == 'CRITICAL':
@@ -98,14 +95,17 @@ def folder_create(self):
     try:
         os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text()))
     except FileExistsError:
-        set_message_box(self, "CRITICAL", "フォルダ", "フォルダがすでに存在します。")
+        set_message_box("CRITICAL", "フォルダ", "フォルダがすでに存在します。")
     except Exception as e:
-        set_message_box(self, "INFO", "フォルダ", e)
-    os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(), FOLDER_COVERAGE))
-    os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(), FOLDER_LOG))
-    os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(), FOLDER_COMPARE))
-    os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(),
-                             FOLDER_COMPARE, FOLDER_COMPARE_OLD))
+        set_message_box("INFO", "フォルダ", e)
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text(), FOLDER_COVERAGE))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text(), FOLDER_LOG))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text(), FOLDER_COMPARE))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text(), FOLDER_COMPARE, FOLDER_COMPARE_OLD))
     os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(),
                              FOLDER_COMPARE, FOLDER_COMPARE_OLD, FOLDER_COMPARE_FILE))
     os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(),
@@ -125,14 +125,16 @@ def excel_copy(self):
                 or file_name.find("カバー補足") >= 0 \
                 or file_name.find("テスト仕様書") >= 0 \
                 or file_name.find("手修正確認") >= 0:
-            destination_file = os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(),
+            destination_file = os.path.join(self.parent.input_file.text(),
+                                            self.parent.input_kinoid.text(),
                                             os.path.basename(file_name))
-            shutil.copyfile(os.path.join(self.parent.input_browse.text(), file_name), destination_file)
+            shutil.copyfile(os.path.join(self.parent.input_browse.text(),
+                                         file_name), destination_file)
 
 
 def svn_operate(self):
     print('svn_operate start...')
-    cmd_update = 'svn update ' + self.parent.input_browse.text()
+    # cmd_update = 'svn update ' + self.parent.input_browse.text()
     # result = os.system(cmd_update)
     # print("svn update result : ", result)
     result = subprocess.run(['svn', '--version'], text=True, capture_output=True)
@@ -143,15 +145,18 @@ def svn_operate(self):
                                 stderr=subprocess.PIPE, text=True)
         stdout, stderr = proc.communicate()
         if proc.returncode != 0:
-            set_message_box(self, "CRITICAL", "SVN", "サンプルフォルダをSVNから最新版に更新することが失敗しました、\n自分で更新してください。")
-            print(f"Command '{self.parent.input_browse.text()}' failed with return code {proc.returncode}")
+            set_message_box("CRITICAL", "SVN",
+                            "サンプルフォルダをSVNから最新版に更新することが失敗しました、\n自分で更新してください。")
+            print(f"Command '{self.parent.input_browse.text()}' "
+                  f"failed with return code {proc.returncode}")
             print("Errors:", stderr)
         else:
-            set_message_box(self, "INFO", "SVN", "SVNから更新することが成功しました、\n続けてください。")
+            set_message_box("INFO", "SVN", "SVNから更新することが成功しました、\n続けてください。")
             print(f"Command '{self.parent.input_browse.text()}' executed successfully")
             print("Output:", stdout)
     else:
-        set_message_box(self, "WARNING", "SVN", "コンピューターにはまだSVNコマンドラインがインストールされていません。\nインストールしてください。")
+        set_message_box("WARNING", "SVN",
+                        "コンピューターにはまだSVNコマンドラインがインストールされていません。\nインストールしてください。")
 
 
 class EventHandler:
@@ -164,7 +169,7 @@ class EventHandler:
             if folder_path:
                 print("folder_path", folder_path)
                 self.parent.input_browse.setText(folder_path)
-                set_message_box(self, "INFO", "注意", "サンプルフォルダをSVNから最新版に更新する必要があります。")
+                set_message_box("INFO", "注意", "サンプルフォルダをSVNから最新版に更新する必要があります。")
                 svn_operate(self)
         except Exception as e:
             print("An error occurred : ", e)
@@ -210,12 +215,8 @@ class EventHandler:
 class MyApp(QMainWindow):
     def __init__(self):
         super().__init__()
-
-        self.event_handler = EventHandler(self)
-        self.init_ui()
-
-    def init_ui(self):
-        global BUTTON_STYLESHEET
+        self.current_datetime = QDateTime.currentDateTime().toString(Qt.ISODate)
+        self.timer = QTimer()
         self.top_group = QGroupBox("選択")
         self.top_layout_1 = QHBoxLayout()
         self.top_layout_2 = QHBoxLayout()
@@ -226,14 +227,10 @@ class MyApp(QMainWindow):
         self.input_browse = QLineEdit()
         self.input_browse.setReadOnly(True)
         self.button_browse = QPushButton('開く')
-        self.button_browse.clicked.connect(self.event_handler.browse_button_click)
-        # self.button_browse.released.connect(self.event_handler.browse_button_released)
         self.label_file = QLabel('出力パス')
         self.input_file = QLineEdit()
         self.input_file.setReadOnly(True)
         self.button_file = QPushButton('開く')
-        self.button_file.clicked.connect(self.event_handler.file_button_click)
-
         # todo QComboBoxに変更
         self.label_kinoid = QLabel('機能ID  ')
         self.input_kinoid = QLineEdit()
@@ -263,13 +260,10 @@ class MyApp(QMainWindow):
         self.button_group = QGroupBox("操作")
         self.button_layout = QHBoxLayout()
         self.exec_button = QPushButton('実行')
-        self.exec_button.clicked.connect(self.event_handler.execute)
         self.save_button = QPushButton('出力フォルダを開く')
         self.save_button.setDisabled(True)
-        self.save_button.clicked.connect(self.event_handler.records_open)
         self.exit_button = QPushButton('退出')
         self.exit_button.setStyleSheet("background-color: lightgray")
-        self.exit_button.clicked.connect(self.event_handler.app_exit)
 
         self.button_layout.addWidget(self.exec_button)
         self.button_layout.addWidget(self.save_button)
@@ -305,6 +299,20 @@ class MyApp(QMainWindow):
         self.setWindowTitle('BIP-成果物作成-Ver.1.0-Powered by PyQt5')
         self.setGeometry(650, 350, 600, 300)
         self.setFixedSize(600, 300)
+
+        self.event_handler = EventHandler(self)
+        self.init_ui()
+
+    def init_ui(self):
+        global BUTTON_STYLESHEET
+
+        self.button_browse.clicked.connect(self.event_handler.browse_button_click)
+        # self.button_browse.released.connect(self.event_handler.browse_button_released)
+        self.button_file.clicked.connect(self.event_handler.file_button_click)
+        self.exec_button.clicked.connect(self.event_handler.execute)
+        self.save_button.clicked.connect(self.event_handler.records_open)
+        self.exit_button.clicked.connect(self.event_handler.app_exit)
+
         self.timer_init()
 
         # menu_bar = self.menuBar()
@@ -328,12 +336,10 @@ class MyApp(QMainWindow):
         # self.exit_action.setShortcut('Alt+Q')
 
     def timer_init(self):
-        self.timer = QTimer()
         self.timer.timeout.connect(self.update_datetime)
         self.timer.start(1000)
 
     def update_datetime(self):
-        self.current_datetime = QDateTime.currentDateTime().toString(Qt.ISODate)
         self.tips_label.setText(f'{self.current_datetime}')
 
 
