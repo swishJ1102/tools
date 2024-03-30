@@ -101,8 +101,10 @@ def folder_create(self):
         os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text()))
     except FileExistsError:
         set_message_box("CRITICAL", "フォルダ", "フォルダがすでに存在します。")
+        raise
     except OSError as e:
         set_message_box("INFO", "フォルダ", e)
+        raise
     os.makedirs(os.path.join(self.parent.input_file.text(),
                              self.parent.input_kinoid.text(), FOLDER_COVERAGE))
     os.makedirs(os.path.join(self.parent.input_file.text(),
@@ -194,8 +196,10 @@ class EventHandler:
                 svn_operate(self)
         except OSError as e:
             print("An error occurred : ", e)
+            raise
         except RuntimeError as e:
             print("A runtime error occurred : ", e)
+            raise
 
     def file_button_click(self):
         """出力開く"""
@@ -206,15 +210,21 @@ class EventHandler:
                 self.parent.input_file.setText(folder_path)
         except Exception as e:
             print("An error occurred : ", e)
+            raise
 
     def execute(self):
         """実行"""
+        self.parent.progress_bar.setValue(0)
         check_flag, context = is_null_check(self)
         if check_flag is True:
             set_message_box("WARNING", "非空チェック", context[:len(context) - 1])
             return
             # QMessageBox.warning(None, "非空チェック", context[:len(context) - 1])
-        folder_create(self)
+        try:
+            folder_create(self)
+        except Exception as e:
+            print("Caught an exception in some_method:", e)
+            raise
         self.parent.progress_bar.setValue(10)
         excel_copy(self)
         self.parent.progress_bar.setValue(20)
