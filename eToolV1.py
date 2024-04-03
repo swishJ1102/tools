@@ -7,7 +7,7 @@ from configparser import ConfigParser
 
 from PyQt5.QtCore import QDateTime, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QProgressBar, \
-    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow
+    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction
 
 FOLDER_LOG = "LOG"
 FOLDER_COVERAGE = "カバレッジ"
@@ -20,9 +20,18 @@ FOLDER_COMPARE_DB = "DB"
 EXCEL_EVIDENCE = "エビデンス.xlsx"
 EXCEL_TEST = "テスト仕様書.xlsx"
 EXCEL_COMPARE = "手修正確認.xlsx"
-EXCEL_COVERAGE = "カバー.xlsx"
+EXCEL_COVERAGE = "カバレッジ結果に関する補足説明.xlsx"
+EXCEL_LIST = "成果物一覧.xlsx"
 
 INPUT_BROWSE = ''
+INPUT_FILE = ''
+INPUT_KINOID = ''
+INPUT_KINONAME = ''
+INPUT_TANTOUSYA = ''
+
+# todo
+INPUT_BROWSE_FLAG = ''
+
 # button stylesheet
 BUTTON_STYLESHEET = 'QPushButton {background-color:rgba(255,178,0,100%);\
                                                     color: white; \
@@ -48,16 +57,41 @@ def get_config_file_path():
 def load_config_content(tag):
     """コンフィグをロード"""
     config = ConfigParser()
-    config.read(get_config_file_path())
+    config.read(get_config_file_path(), encoding='utf-8')
     return config[tag] if tag in config else {}
 
 
-def save_file_paths():
+def init_config_content():
+    global INPUT_BROWSE, INPUT_FILE, INPUT_KINOID, INPUT_KINONAME, INPUT_TANTOUSYA
+    paths = load_config_content('Paths')
+    if paths['input_browse'] is not None:
+        INPUT_BROWSE = paths['input_browse']
+    if paths['input_file'] is not None:
+        INPUT_FILE = paths['input_file']
+    inputs = load_config_content('Inputs')
+    if inputs['input_kinoid'] is not None:
+        INPUT_KINOID = inputs['input_kinoid']
+    if inputs['input_kinoname'] is not None:
+        INPUT_KINONAME = inputs['input_kinoname']
+    if inputs['input_tantousya'] is not None:
+        INPUT_TANTOUSYA = inputs['input_tantousya']
+
+
+def save_file_paths(self):
     """コンフィグにパスインフォを保存"""
     if os.path.exists(INPUT_BROWSE):
         config = ConfigParser()
-        config.read(get_config_file_path())
-        config.set('Paths', 'default_path', os.path.dirname(os.path.abspath(INPUT_BROWSE)))
+        config.read(get_config_file_path(), encoding='utf-8')
+        if self.parent.input_browse.text():
+            config.set('Paths', 'input_browse', self.parent.input_browse.text())
+        if self.parent.input_file.text():
+            config.set('Paths', 'input_file', self.parent.input_file.text())
+        if self.parent.input_kinoid.text():
+            config.set('Inputs', 'input_kinoid', self.parent.input_kinoid.text())
+        if self.parent.input_kinoname.text():
+            config.set('Inputs', 'input_kinoname', self.parent.input_kinoname.text())
+        if self.parent.input_tantousya.text():
+            config.set('Inputs', 'input_tantousya', self.parent.input_tantousya.text())
         with open(get_config_file_path(), 'w', encoding='utf-8') as configfile:
             config.write(configfile)
 
@@ -78,7 +112,7 @@ def is_null_check(self):
     if self.parent.input_kinoname.text() is None or self.parent.input_kinoname.text() == '':
         check_flag = True
         context = context + "機能名\n"
-    if self.parent.input_tantounsya.text() is None or self.parent.input_tantounsya.text() == '':
+    if self.parent.input_tantousya.text() is None or self.parent.input_tantousya.text() == '':
         check_flag = True
         context = context + "担当者\n"
     return check_flag, context
@@ -140,7 +174,7 @@ def excel_copy(self):
             shutil.copyfile(os.path.join(self.parent.input_browse.text(),
                                          file_name), destination_file)
             i += 1
-    if i < 4:
+    if i < 5:
         set_message_box("INFO", "EXPLORER", "サンプルが足りないので\nチェックしてください。")
 
 
@@ -188,7 +222,12 @@ class EventHandler:
         try:
             options = QFileDialog.Options()
             options |= QFileDialog.DontUseNativeDialog
-            folder_path = QFileDialog.getExistingDirectory(self.parent, "サンプルパス選択", options=options)
+            open_path = ''
+            if self.parent.input_browse.text() is not None:
+                open_path = self.parent.input_browse.text()
+            folder_path = QFileDialog.getExistingDirectory(self.parent, "サンプルパス選択",
+                                                           directory=open_path,
+                                                           options=options)
             if folder_path:
                 print("folder_path", folder_path)
                 self.parent.input_browse.setText(folder_path)
@@ -204,7 +243,13 @@ class EventHandler:
     def file_button_click(self):
         """出力開く"""
         try:
-            folder_path = QFileDialog.getExistingDirectory(self.parent, "出力パス選択")
+            options = QFileDialog.Options()
+            options |= QFileDialog.DontUseNativeDialog
+            if self.parent.input_file.text() is not None:
+                open_path = self.parent.input_file.text()
+            folder_path = QFileDialog.getExistingDirectory(self.parent, "出力パス選択",
+                                                           directory=open_path,
+                                                           options=options)
             if folder_path:
                 print(folder_path)
                 self.parent.input_file.setText(folder_path)
@@ -224,7 +269,7 @@ class EventHandler:
             folder_create(self)
         except Exception as e:
             print("Caught an exception in some_method:", e)
-            raise
+            return
         self.parent.progress_bar.setValue(10)
         excel_copy(self)
         self.parent.progress_bar.setValue(20)
@@ -246,8 +291,37 @@ class EventHandler:
         msg_box.button(QMessageBox.No).setText("いいえ(&N)")
         result = msg_box.exec_()
         if result == QMessageBox.Yes:
-            save_file_paths()
+            save_file_paths(self)
             self.parent.close()
+
+    def open_config_editor(self):
+        # self.parent.setEnabled(False)
+        self.config_editor = ConfigEditor(self.parent)
+        self.config_editor.show()
+
+
+class ConfigEditor(QWidget):
+    def __init__(self, main_window):
+        super().__init__()
+        self.setWindowTitle("配置エディタ")
+        # self.config_data = config_data
+        self.main_window = main_window
+        self.setWindowModality(Qt.ApplicationModal)
+        self.initUI()
+
+    def initUI(self):
+        self.setStyle(QApplication.style())
+        layout = QVBoxLayout()
+        self.label1 = QLabel("サンプルパス")
+        layout.addWidget(self.label1)
+        self.input1 = QLineEdit()
+        layout.addWidget(self.input1)
+        self.button1 = QPushButton('キャンセル')
+        self.button2 = QPushButton('確認')
+        layout.addWidget(self.button1)
+        layout.addWidget(self.button2)
+        self.setLayout(layout)
+        self.setGeometry(750, 450, 300, 150)
 
 
 class MyApp(QMainWindow):
@@ -278,7 +352,7 @@ class MyApp(QMainWindow):
         self.label_kinoname = QLabel('機能名  ')
         self.input_kinoname = QLineEdit()
         self.label_tantounsya = QLabel('担当者  ')
-        self.input_tantounsya = QLineEdit()
+        self.input_tantousya = QLineEdit()
 
         self.top_layout_1.addWidget(self.label_browse)
         self.top_layout_1.addWidget(self.input_browse)
@@ -291,7 +365,7 @@ class MyApp(QMainWindow):
         self.top_layout_3.addWidget(self.label_kinoname)
         self.top_layout_3.addWidget(self.input_kinoname)
         self.top_layout_4.addWidget(self.label_tantounsya)
-        self.top_layout_4.addWidget(self.input_tantounsya)
+        self.top_layout_4.addWidget(self.input_tantousya)
         self.top_layout.addLayout(self.top_layout_1)
         self.top_layout.addLayout(self.top_layout_2)
         self.top_layout.addLayout(self.top_layout_3)
@@ -332,10 +406,31 @@ class MyApp(QMainWindow):
         self.main_layout.addWidget(self.button_group)
         self.main_layout.addWidget(self.tips_group)
 
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu('操作')
+        self.exec_action = QAction('実行', self)
+        file_menu.addAction(self.exec_action)
+        self.exec_action.setEnabled(True)
+        self.exec_action.setShortcut('Ctrl+E')
+
+        self.open_action = QAction('報告を開く', self)
+        file_menu.addAction(self.open_action)
+        self.open_action.setEnabled(False)
+        self.open_action.setShortcut('Alt+O')
+
+        self.exit_action = QAction('退出', self)
+        file_menu.addAction(self.exit_action)
+        self.exit_action.setEnabled(True)
+        self.exit_action.setShortcut('Alt+Q')
+
+        config_menu = menu_bar.addMenu('配置')
+        self.config_action = QAction('エディタ', self)
+        config_menu.addAction(self.config_action)
+        self.config_action.setShortcut('Ctrl+I')
+
         central_widget = QWidget()
         central_widget.setLayout(self.main_layout)
         self.setCentralWidget(central_widget)
-
         self.setLayout(self.main_layout)
         self.setWindowTitle('BIP-成果物作成-Ver.1.0-Powered by PyQt5')
         self.setGeometry(650, 350, 600, 300)
@@ -352,7 +447,23 @@ class MyApp(QMainWindow):
         self.save_button.clicked.connect(self.event_handler.records_open)
         self.exit_button.clicked.connect(self.event_handler.app_exit)
 
+        self.exec_action.triggered.connect(self.event_handler.execute)
+        self.open_action.triggered.connect(self.event_handler.records_open)
+        self.exit_action.triggered.connect(self.event_handler.app_exit)
+        self.config_action.triggered.connect(self.event_handler.open_config_editor)
+
         self.timer_init()
+        init_config_content()
+        if INPUT_BROWSE is not None:
+            self.input_browse.setText(INPUT_BROWSE)
+        if INPUT_FILE is not None:
+            self.input_file.setText(INPUT_FILE)
+        if INPUT_KINOID is not None:
+            self.input_kinoid.setText(INPUT_KINOID)
+        if INPUT_KINONAME is not None:
+            self.input_kinoname.setText(INPUT_KINONAME)
+        if INPUT_TANTOUSYA is not None:
+            self.input_tantousya.setText(INPUT_TANTOUSYA)
 
     def timer_init(self):
         """タイマーコントロール"""
