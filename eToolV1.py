@@ -7,7 +7,7 @@ from configparser import ConfigParser
 
 from PyQt5.QtCore import QDateTime, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QProgressBar, \
-    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction
+    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction, QCheckBox
 
 FOLDER_LOG = "LOG"
 FOLDER_COVERAGE = "カバレッジ"
@@ -15,7 +15,7 @@ FOLDER_COMPARE = "現新比較"
 FOLDER_COMPARE_OLD = "現"
 FOLDER_COMPARE_NEW = "新"
 FOLDER_COMPARE_FILE = "ファイル"
-FOLDER_COMPARE_DB = "DB"
+FOLDER_COMPARE_DB = "データ"
 
 EXCEL_EVIDENCE = "エビデンス.xlsx"
 EXCEL_TEST = "テスト仕様書.xlsx"
@@ -64,6 +64,8 @@ def load_config_content(tag):
 def init_config_content():
     global INPUT_BROWSE, INPUT_FILE, INPUT_KINOID, INPUT_KINONAME, INPUT_TANTOUSYA
     paths = load_config_content('Paths')
+    for path in paths:
+        print("path:", path)
     if paths['input_browse'] is not None:
         INPUT_BROWSE = paths['input_browse']
     if paths['input_file'] is not None:
@@ -79,21 +81,29 @@ def init_config_content():
 
 def save_file_paths(self):
     """コンフィグにパスインフォを保存"""
-    if os.path.exists(INPUT_BROWSE):
-        config = ConfigParser()
-        config.read(get_config_file_path(), encoding='utf-8')
-        if self.parent.input_browse.text():
-            config.set('Paths', 'input_browse', self.parent.input_browse.text())
-        if self.parent.input_file.text():
-            config.set('Paths', 'input_file', self.parent.input_file.text())
-        if self.parent.input_kinoid.text():
-            config.set('Inputs', 'input_kinoid', self.parent.input_kinoid.text())
-        if self.parent.input_kinoname.text():
-            config.set('Inputs', 'input_kinoname', self.parent.input_kinoname.text())
-        if self.parent.input_tantousya.text():
-            config.set('Inputs', 'input_tantousya', self.parent.input_tantousya.text())
-        with open(get_config_file_path(), 'w', encoding='utf-8') as configfile:
-            config.write(configfile)
+    config = ConfigParser()
+    config.read(get_config_file_path(), encoding='utf-8')
+    if self.parent.input_browse.text():
+        config.set('Paths', 'input_browse', self.parent.input_browse.text())
+    if self.parent.input_file.text():
+        config.set('Paths', 'input_file', self.parent.input_file.text())
+    if self.parent.input_kinoid.text():
+        config.set('Inputs', 'input_kinoid', self.parent.input_kinoid.text())
+    if self.parent.input_kinoname.text():
+        config.set('Inputs', 'input_kinoname', self.parent.input_kinoname.text())
+    if self.parent.input_tantousya.text():
+        config.set('Inputs', 'input_tantousya', self.parent.input_tantousya.text())
+    with open(get_config_file_path(), 'w', encoding='utf-8') as configfile:
+        config.write(configfile)
+
+
+def save_tag_context(self, tag, label):
+    config = ConfigParser()
+    config.read(get_config_file_path(), encoding='utf-8')
+    label_text = getattr(self, label).text()
+    config.set(tag, label, label_text)
+    with open(get_config_file_path(), 'w', encoding='utf-8') as configfile:
+        config.write(configfile)
 
 
 def is_null_check(self):
@@ -167,10 +177,13 @@ def excel_copy(self):
         if file_name.find("エビデンス") >= 0 \
                 or file_name.find("カバー補足") >= 0 \
                 or file_name.find("テスト仕様書") >= 0 \
-                or file_name.find("手修正確認") >= 0:
+                or file_name.find("手修正確認") >= 0 \
+                or file_name.find("成果物一覧") >= 0:
             destination_file = os.path.join(self.parent.input_file.text(),
                                             self.parent.input_kinoid.text(),
-                                            os.path.basename(file_name))
+                                            os.path.basename(file_name).replace("-機能名",
+                                                                                "-" + self.parent.input_kinoname.text()).replace(
+                                                "機能ID", self.parent.input_kinoid.text()))
             shutil.copyfile(os.path.join(self.parent.input_browse.text(),
                                          file_name), destination_file)
             i += 1
@@ -232,7 +245,7 @@ class EventHandler:
                 print("folder_path", folder_path)
                 self.parent.input_browse.setText(folder_path)
                 set_message_box("INFO", "注意", "サンプルフォルダをSVNから最新版に更新する必要があります。")
-                svn_operate(self)
+                # svn_operate(self)
         except OSError as e:
             print("An error occurred : ", e)
             raise
@@ -316,12 +329,27 @@ class ConfigEditor(QWidget):
         layout.addWidget(self.label1)
         self.input1 = QLineEdit()
         layout.addWidget(self.input1)
+
+        # 创建一个复选框
+        self.cb = QCheckBox('开关按钮', self)
+        self.cb.setCheckable(True)
+        self.cb.setChecked(False)  # 设置默认状态为关闭
+        self.cb.toggled.connect(self.onToggle)  # 连接信号和槽函数
+        layout.addWidget(self.cb)
+
         self.button1 = QPushButton('キャンセル')
         self.button2 = QPushButton('確認')
         layout.addWidget(self.button1)
         layout.addWidget(self.button2)
         self.setLayout(layout)
         self.setGeometry(750, 450, 300, 150)
+
+    def onToggle(self):
+        # 当复选框状态变化时调用该函数
+        if self.cb.isChecked():
+            print('开关打开')
+        else:
+            print('开关关闭')
 
 
 class MyApp(QMainWindow):
@@ -330,7 +358,8 @@ class MyApp(QMainWindow):
     def __init__(self):
         """init"""
         super().__init__()
-        self.current_datetime = QDateTime.currentDateTime().toString(Qt.ISODate)
+
+        self.current_datetime = None
         self.timer = QTimer()
         self.top_group = QGroupBox("選択")
         self.top_layout_1 = QHBoxLayout()
@@ -349,10 +378,13 @@ class MyApp(QMainWindow):
         # todo QComboBoxに変更
         self.label_kinoid = QLabel('機能ID  ')
         self.input_kinoid = QLineEdit()
+        self.input_kinoid.setPlaceholderText('機能ID')
         self.label_kinoname = QLabel('機能名  ')
         self.input_kinoname = QLineEdit()
-        self.label_tantounsya = QLabel('担当者  ')
+        self.input_kinoname.setPlaceholderText('機能名')
+        self.label_tantousya = QLabel('担当者  ')
         self.input_tantousya = QLineEdit()
+        self.input_tantousya.setPlaceholderText('担当者')
 
         self.top_layout_1.addWidget(self.label_browse)
         self.top_layout_1.addWidget(self.input_browse)
@@ -364,7 +396,7 @@ class MyApp(QMainWindow):
         self.top_layout_3.addWidget(self.input_kinoid)
         self.top_layout_3.addWidget(self.label_kinoname)
         self.top_layout_3.addWidget(self.input_kinoname)
-        self.top_layout_4.addWidget(self.label_tantounsya)
+        self.top_layout_4.addWidget(self.label_tantousya)
         self.top_layout_4.addWidget(self.input_tantousya)
         self.top_layout.addLayout(self.top_layout_1)
         self.top_layout.addLayout(self.top_layout_2)
@@ -452,6 +484,9 @@ class MyApp(QMainWindow):
         self.exit_action.triggered.connect(self.event_handler.app_exit)
         self.config_action.triggered.connect(self.event_handler.open_config_editor)
 
+        self.input_browse.textChanged.connect(self.onTextChanged)
+        self.input_tantousya.focusOutEvent = self.onFocusOut
+
         self.timer_init()
         init_config_content()
         if INPUT_BROWSE is not None:
@@ -472,7 +507,20 @@ class MyApp(QMainWindow):
 
     def update_datetime(self):
         """タイマーを更新"""
+        self.current_datetime = QDateTime.currentDateTime().toString(Qt.ISODate)
         self.tips_label.setText(f'{self.current_datetime}')
+
+    def onTextChanged(self, text):
+        # 处理文本变化事件
+        print('文本内容变化:', text)
+        save_tag_context(self, "Paths", "input_browse")
+
+    def onFocusOut(self, event):
+        # 处理光标离开事件
+        text = self.input_tantousya.text()
+        print('光标离开，文本为:', text)
+        # 调用父类的 focusOutEvent 方法，以确保事件能够正常处理
+        QLineEdit.focusOutEvent(self.input_tantousya, event)
 
 
 if __name__ == '__main__':
