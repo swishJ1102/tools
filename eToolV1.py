@@ -9,7 +9,7 @@ from configparser import ConfigParser
 import openpyxl
 from PyQt5.QtCore import QDateTime, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QProgressBar, \
-    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction, QCheckBox
+    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction, QCheckBox, QRadioButton
 from openpyxl.styles import Alignment
 
 # [Paths]
@@ -401,7 +401,7 @@ class EventHandler:
 class ConfigEditor(QWidget):
     def __init__(self, main_window):
         super().__init__()
-        self.setWindowTitle("配置エディタ")
+        self.setWindowTitle("オプション")
         # self.config_data = config_data
         self.main_window = main_window
         self.setWindowModality(Qt.ApplicationModal)
@@ -422,12 +422,24 @@ class ConfigEditor(QWidget):
         self.cb.toggled.connect(self.onToggle)  # 连接信号和槽函数
         layout.addWidget(self.cb)
 
+        self.label = QLabel('No option selected', self)
+        layout.addWidget(self.label)
+
+        self.radio_btn1 = QRadioButton('Option 1', self)
+        self.radio_btn1.setChecked(True)  # 设置默认选中状态
+        self.radio_btn1.toggled.connect(self.on_radio_button_toggled)
+        layout.addWidget(self.radio_btn1)
+
+        self.radio_btn2 = QRadioButton('Option 2', self)
+        self.radio_btn2.toggled.connect(self.on_radio_button_toggled)
+        layout.addWidget(self.radio_btn2)
+
         self.button1 = QPushButton('キャンセル')
         self.button2 = QPushButton('確認')
         layout.addWidget(self.button1)
         layout.addWidget(self.button2)
         self.setLayout(layout)
-        self.setGeometry(750, 450, 300, 150)
+        self.setGeometry(750, 400, 300, 150)
 
     def onToggle(self):
         # 当复选框状态变化时调用该函数
@@ -435,6 +447,15 @@ class ConfigEditor(QWidget):
             print('开关打开')
         else:
             print('开关关闭')
+
+    def on_radio_button_toggled(self):
+        selected_option = None
+        if self.radio_btn1.isChecked():
+            selected_option = 'Option 1'
+        elif self.radio_btn2.isChecked():
+            selected_option = 'Option 2'
+
+        self.label.setText(f'Selected option: {selected_option}')
 
 
 class MyApp(QMainWindow):
@@ -546,12 +567,12 @@ class MyApp(QMainWindow):
         self.exit_action.setEnabled(True)
         self.exit_action.setShortcut('Alt+Q')
 
-        config_menu = menu_bar.addMenu('配置')
-        self.config_action = QAction('エディタ', self)
+        config_menu = menu_bar.addMenu('設定')
+        self.config_action = QAction('オプション', self)
         config_menu.addAction(self.config_action)
         self.config_action.setShortcut('Ctrl+I')
 
-        self.config_action.setDisabled(True)
+        # self.config_action.setDisabled(True)
 
         central_widget = QWidget()
         central_widget.setLayout(self.main_layout)
