@@ -500,7 +500,6 @@ class ConfigEditor(QWidget):
         self.on_slider_released()  # 更新标签文本
 
 
-
 class SwitchButton(QWidget):
     """自定义Switch按钮"""
 
@@ -610,7 +609,11 @@ class MyApp(QMainWindow):
         self.input_tantousya = QLineEdit()
         self.input_tantousya.setPlaceholderText('担当者')
         self.label_system = QLabel('システム ')
+        self.label_system.setToolTip('システム名')
+        self.label_system.setToolTipDuration(2000)
         self.input_system = QLineEdit()
+        self.input_system.setToolTip('ここではシステム名を記入してください。')
+        self.input_system.setToolTipDuration(2000)
         self.input_system.setPlaceholderText('システム')
 
         self.top_layout_1.addWidget(self.label_browse)
