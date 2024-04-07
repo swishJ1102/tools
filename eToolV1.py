@@ -7,9 +7,10 @@ import sys
 from configparser import ConfigParser
 
 import openpyxl
-from PyQt5.QtCore import QDateTime, Qt, QTimer
+from PyQt5.QtCore import QDateTime, Qt, QTimer, QRect
+from PyQt5.QtGui import QPen, QColor, QBrush, QFont, QPainter
 from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QProgressBar, \
-    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction, QCheckBox, QRadioButton
+    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction, QCheckBox, QRadioButton, QSlider
 from openpyxl.styles import Alignment
 
 # [Paths]
@@ -434,6 +435,33 @@ class ConfigEditor(QWidget):
         self.radio_btn2.toggled.connect(self.on_radio_button_toggled)
         layout.addWidget(self.radio_btn2)
 
+        self.label_switch = QLabel('Slide switch is OFF', self)
+        layout.addWidget(self.label_switch)
+
+        self.slider = QSlider(Qt.Horizontal, self)
+        self.slider.setMinimumWidth(200)  # 设置最小宽度
+        self.slider.setRange(0, 1)  # 设置范围为 0 到 1
+        self.slider.setSliderPosition(0)  # 设置初始位置为关闭状态
+        self.slider.setStyleSheet("""
+                    QSlider::handle:horizontal {
+                        background-color: #ffffff;
+                        border: 1px solid #000000;
+                        width: 50px;
+                        margin: -4px 0;
+                        border-radius: 8px;
+                    }
+                    QSlider::groove:horizontal {
+                        background-color: #dddddd;
+                        height: 8px;
+                    }
+                """)
+        self.slider.sliderReleased.connect(self.on_slider_released)
+        self.slider.mousePressEvent = self.on_slider_clicked  # 捕获鼠标点击事件
+        layout.addWidget(self.slider)
+
+        self.switch_button = SwitchButton()
+        layout.addWidget(self.switch_button)
+
         self.button1 = QPushButton('キャンセル')
         self.button2 = QPushButton('確認')
         layout.addWidget(self.button1)
@@ -456,6 +484,96 @@ class ConfigEditor(QWidget):
             selected_option = 'Option 2'
 
         self.label.setText(f'Selected option: {selected_option}')
+
+    def on_slider_released(self):
+        if self.slider.value() == 1:
+            self.label_switch.setText('Slide switch is ON')
+        else:
+            self.label_switch.setText('Slide switch is OFF')
+
+    def on_slider_clicked(self, event):
+        # 单击滑动条时切换状态
+        if self.slider.value() == 0:
+            self.slider.setValue(1)
+        else:
+            self.slider.setValue(0)
+        self.on_slider_released()  # 更新标签文本
+
+
+
+class SwitchButton(QWidget):
+    """自定义Switch按钮"""
+
+    def __init__(self, parent=None):
+        super(SwitchButton, self).__init__(parent)
+
+        # 设置无边框和背景透明
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        self.resize(70, 30)
+        self.state = False  # 按钮状态：True表示开，False表示关
+        self.setFixedSize(70, 30)
+        # self.clicked.connect(self.toggle_state)  # 连接点击事件
+
+    # def toggle_state(self):
+    #     self.checked = not self.checked  # 切换状态
+
+    def mousePressEvent(self, event):
+        """鼠标点击事件：用于切换按钮状态"""
+        super(SwitchButton, self).mousePressEvent(event)
+
+        self.state = False if self.state else True
+        self.update()
+
+    def paintEvent(self, event):
+        """绘制按钮"""
+        super(SwitchButton, self).paintEvent(event)
+
+        # 创建绘制器并设置抗锯齿和图片流畅转换
+        painter = QPainter(self)
+        painter.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
+
+        # 定义字体样式
+        font = QFont('Microsoft YaHei')
+        font.setPixelSize(14)
+        painter.setFont(font)
+
+        # 开关为开的状态
+        if self.state:
+            # 绘制背景
+            painter.setPen(Qt.NoPen)
+            brush = QBrush(QColor('#FF475D'))
+            painter.setBrush(brush)
+            painter.drawRoundedRect(0, 0, self.width(), self.height(), self.height() // 2, self.height() // 2)
+
+            # 绘制圆圈
+            painter.setPen(Qt.NoPen)
+            brush.setColor(QColor('#ffffff'))
+            painter.setBrush(brush)
+            painter.drawRoundedRect(43, 3, 24, 24, 12, 12)
+
+            # 绘制文本
+            painter.setPen(QPen(QColor('#ffffff')))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawText(QRect(18, 4, 50, 20), Qt.AlignLeft, '开')
+        # 开关为关的状态
+        else:
+            # 绘制背景
+            painter.setPen(Qt.NoPen)
+            brush = QBrush(QColor('#FFFFFF'))
+            painter.setBrush(brush)
+            painter.drawRoundedRect(0, 0, self.width(), self.height(), self.height() // 2, self.height() // 2)
+
+            # 绘制圆圈
+            pen = QPen(QColor('#999999'))
+            pen.setWidth(1)
+            painter.setPen(pen)
+            painter.drawRoundedRect(3, 3, 24, 24, 12, 12)
+
+            # 绘制文本
+            painter.setBrush(Qt.NoBrush)
+            painter.drawText(QRect(38, 4, 50, 20), Qt.AlignLeft, '关')
 
 
 class MyApp(QMainWindow):
