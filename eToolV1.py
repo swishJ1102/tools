@@ -1,13 +1,27 @@
 """成果物作成"""
+import datetime
 import os
 import shutil
 import subprocess
 import sys
 from configparser import ConfigParser
 
+import openpyxl
 from PyQt5.QtCore import QDateTime, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QProgressBar, \
     QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction, QCheckBox
+from openpyxl.styles import Alignment
+
+# [Paths]
+# input_browse = E:/BIP/3開発庫/00移行設計/03移行調査成果物/ドキュメントサンプル
+# input_file = G:/20240406
+#
+# [Inputs]
+# input_kinoid = CIS0001
+# input_kinoname = テスト機能
+# input_tantousya = 王永盛
+# input_system = CIS
+
 
 FOLDER_LOG = "LOG"
 FOLDER_COVERAGE = "カバレッジ"
@@ -17,17 +31,34 @@ FOLDER_COMPARE_NEW = "新"
 FOLDER_COMPARE_FILE = "ファイル"
 FOLDER_COMPARE_DB = "データ"
 
-EXCEL_EVIDENCE = "エビデンス.xlsx"
-EXCEL_TEST = "テスト仕様書.xlsx"
-EXCEL_COMPARE = "手修正確認.xlsx"
-EXCEL_COVERAGE = "カバレッジ結果に関する補足説明.xlsx"
-EXCEL_LIST = "成果物一覧.xlsx"
+EXCEL_EVIDENCE = "エビデンス"
+EXCEL_TEST = "単体テスト仕様書"
+EXCEL_COMPARE = "手修正確認"
+EXCEL_COVERAGE = "カバレッジ"
+EXCEL_LIST = "成果物一覧"
+EXCEL_ALL = [
+    EXCEL_EVIDENCE,
+    EXCEL_TEST,
+    EXCEL_COMPARE,
+    EXCEL_COVERAGE,
+    EXCEL_LIST
+]
+EXCEL_DHC = "DHC"
+EXCEL_LISTS = [
+    '2_(機能ID_機能名)単体テストエビデンス.xlsx',
+    '2_(機能ID_機能名)単体テスト仕様書.xlsx',
+    '手修正確認.xlsx',
+    'カバレッジ結果に関する補足説明.xlsx',
+    '成果物一覧.xlsx'
+]
+EXCEL_LISTS_DES = []
 
 INPUT_BROWSE = ''
 INPUT_FILE = ''
 INPUT_KINOID = ''
 INPUT_KINONAME = ''
 INPUT_TANTOUSYA = ''
+INPUT_SYSTEM = ''
 
 # todo
 INPUT_BROWSE_FLAG = ''
@@ -62,7 +93,7 @@ def load_config_content(tag):
 
 
 def init_config_content():
-    global INPUT_BROWSE, INPUT_FILE, INPUT_KINOID, INPUT_KINONAME, INPUT_TANTOUSYA
+    global INPUT_BROWSE, INPUT_FILE, INPUT_KINOID, INPUT_KINONAME, INPUT_TANTOUSYA, INPUT_SYSTEM
     paths = load_config_content('Paths')
     for path in paths:
         print("path:", path)
@@ -77,6 +108,8 @@ def init_config_content():
         INPUT_KINONAME = inputs['input_kinoname']
     if inputs['input_tantousya'] is not None:
         INPUT_TANTOUSYA = inputs['input_tantousya']
+    if inputs['input_system'] is not None:
+        INPUT_SYSTEM = inputs['input_system']
 
 
 def save_file_paths(self):
@@ -93,6 +126,8 @@ def save_file_paths(self):
         config.set('Inputs', 'input_kinoname', self.parent.input_kinoname.text())
     if self.parent.input_tantousya.text():
         config.set('Inputs', 'input_tantousya', self.parent.input_tantousya.text())
+    if self.parent.input_system.text():
+        config.set('Inputs', 'input_system', self.parent.input_system.text())
     with open(get_config_file_path(), 'w', encoding='utf-8') as configfile:
         config.write(configfile)
 
@@ -174,26 +209,74 @@ def excel_copy(self):
     i = 0
     file_names = os.listdir(self.parent.input_browse.text())
     for file_name in file_names:
-        if file_name.find("エビデンス") >= 0 \
-                or file_name.find("カバー補足") >= 0 \
-                or file_name.find("テスト仕様書") >= 0 \
-                or file_name.find("手修正確認") >= 0 \
-                or file_name.find("成果物一覧") >= 0:
-            destination_file = os.path.join(self.parent.input_file.text(),
-                                            self.parent.input_kinoid.text(),
-                                            os.path.basename(file_name).replace("-機能名",
-                                                                                "-" + self.parent.input_kinoname.text()).replace(
-                                                "機能ID", self.parent.input_kinoid.text()))
-            shutil.copyfile(os.path.join(self.parent.input_browse.text(),
-                                         file_name), destination_file)
-            i += 1
-    if i < 5:
+        for module_name in EXCEL_ALL:
+            if file_name.find(module_name) >= 0:
+                destination_file = os.path.join(self.parent.input_file.text(),
+                                                self.parent.input_kinoid.text(),
+                                                os.path.basename(file_name)
+                                                .replace("_機能名", "_" + self.parent.input_kinoname.text())
+                                                .replace("機能ID", self.parent.input_kinoid.text()))
+                shutil.copyfile(os.path.join(self.parent.input_browse.text(),
+                                             file_name), destination_file)
+                EXCEL_LISTS_DES.append(destination_file)
+                i += 1
+    if i < len(EXCEL_LISTS):
         set_message_box("INFO", "EXPLORER", "サンプルが足りないので\nチェックしてください。")
+
+
+def column_letter_to_number(column_letter):
+    """ディジットに変更する"""
+    column_number = 0
+    for char in column_letter:
+        column_number = column_number * 26 + (ord(char) - ord("A") + 1)
+    return column_number
+
+
+def excel_format_evidence(self, path):
+    wb = openpyxl.load_workbook(path)
+    ws = wb['表紙']
+    align = Alignment(vertical='center', horizontal='center')
+    ws.cell(row=2, column=column_letter_to_number("V")).value = self.parent.input_kinoid.text()
+    ws.cell(row=2, column=column_letter_to_number("V")).alignment = align
+    ws.cell(row=2, column=column_letter_to_number("S")).alignment = align
+    ws.cell(row=3, column=column_letter_to_number("V")).value = self.parent.input_kinoname.text()
+    ws.cell(row=3, column=column_letter_to_number("V")).alignment = align
+    ws.cell(row=3, column=column_letter_to_number("S")).alignment = align
+
+    ws.cell(row=2, column=column_letter_to_number("AF")).alignment = align
+    ws.cell(row=3, column=column_letter_to_number("AF")).alignment = align
+    ws.cell(row=2, column=column_letter_to_number("AM")).alignment = align
+    ws.cell(row=3, column=column_letter_to_number("AM")).alignment = align
+
+    align = Alignment(vertical='center')
+    ws.cell(row=2, column=column_letter_to_number("AI")).value = EXCEL_DHC + self.parent.input_tantousya.text()
+    ws.cell(row=2, column=column_letter_to_number("AI")).alignment = align
+    ws.cell(row=3, column=column_letter_to_number("AI")).value = EXCEL_DHC + self.parent.input_tantousya.text()
+    ws.cell(row=3, column=column_letter_to_number("AI")).alignment = align
+    ws.cell(row=1, column=column_letter_to_number("AP")).alignment = align
+
+    current_date = datetime.date.today()
+    formatted_date = current_date.strftime("%Y/%m/%d")
+    align = Alignment(vertical='center', horizontal='right')
+    ws.cell(row=2, column=column_letter_to_number("AP")).value = formatted_date
+    ws.cell(row=2, column=column_letter_to_number("AP")).alignment = align
+    ws.cell(row=3, column=column_letter_to_number("AP")).value = formatted_date
+    ws.cell(row=3, column=column_letter_to_number("AP")).alignment = align
+    wb.save(path)
+    wb.close()
 
 
 def excel_format(self):
     """担当者、機能ID、機能名"""
-    pass
+    for excel in EXCEL_LISTS_DES:
+        if excel.find(EXCEL_EVIDENCE) > 0:
+            excel_format_evidence(self, excel)
+        if excel.find(EXCEL_TEST) > 0:
+            excel_format_evidence(self, excel)
+        if self.parent.progress_bar.value() >= 90:
+            self.parent.progress_bar.setValue(100)
+        else:
+            self.parent.progress_bar.setValue(self.parent.progress_bar.value() + 10)
 
 
 def svn_operate(self):
@@ -286,6 +369,8 @@ class EventHandler:
         self.parent.progress_bar.setValue(10)
         excel_copy(self)
         self.parent.progress_bar.setValue(20)
+        excel_format(self)
+        self.parent.progress_bar.setValue(100)
 
         self.parent.save_button.setDisabled(False)
 
@@ -385,6 +470,9 @@ class MyApp(QMainWindow):
         self.label_tantousya = QLabel('担当者  ')
         self.input_tantousya = QLineEdit()
         self.input_tantousya.setPlaceholderText('担当者')
+        self.label_system = QLabel('システム ')
+        self.input_system = QLineEdit()
+        self.input_system.setPlaceholderText('システム')
 
         self.top_layout_1.addWidget(self.label_browse)
         self.top_layout_1.addWidget(self.input_browse)
@@ -398,6 +486,9 @@ class MyApp(QMainWindow):
         self.top_layout_3.addWidget(self.input_kinoname)
         self.top_layout_4.addWidget(self.label_tantousya)
         self.top_layout_4.addWidget(self.input_tantousya)
+        self.top_layout_4.addWidget(self.label_system)
+        self.top_layout_4.addWidget(self.input_system)
+
         self.top_layout.addLayout(self.top_layout_1)
         self.top_layout.addLayout(self.top_layout_2)
         self.top_layout.addLayout(self.top_layout_3)
@@ -460,6 +551,8 @@ class MyApp(QMainWindow):
         config_menu.addAction(self.config_action)
         self.config_action.setShortcut('Ctrl+I')
 
+        self.config_action.setDisabled(True)
+
         central_widget = QWidget()
         central_widget.setLayout(self.main_layout)
         self.setCentralWidget(central_widget)
@@ -499,6 +592,8 @@ class MyApp(QMainWindow):
             self.input_kinoname.setText(INPUT_KINONAME)
         if INPUT_TANTOUSYA is not None:
             self.input_tantousya.setText(INPUT_TANTOUSYA)
+        if INPUT_SYSTEM is not None:
+            self.input_system.setText(INPUT_SYSTEM)
 
     def timer_init(self):
         """タイマーコントロール"""
