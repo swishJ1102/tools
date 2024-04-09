@@ -44,12 +44,14 @@ EXCEL_TEST = "単体テスト仕様書"
 EXCEL_COMPARE = "手修正確認"
 EXCEL_COVERAGE = "カバレッジ"
 EXCEL_LIST = "成果物一覧"
+EXCEL_REVIEW = "レビュー"
 EXCEL_ALL = [
     EXCEL_EVIDENCE,
     EXCEL_TEST,
     EXCEL_COMPARE,
     EXCEL_COVERAGE,
-    EXCEL_LIST
+    EXCEL_LIST,
+    EXCEL_REVIEW
 ]
 EXCEL_DHC = "DHC"
 EXCEL_LISTS = [
@@ -57,7 +59,8 @@ EXCEL_LISTS = [
     '2_(機能ID_機能名)単体テスト仕様書.xlsx',
     '手修正確認.xlsx',
     'カバレッジ結果に関する補足説明.xlsx',
-    '成果物一覧.xlsx'
+    '成果物一覧.xlsx',
+    '0_(機能ID_機能名)レビュー記録表.xlsx'
 ]
 EXCEL_LISTS_DES = []
 
@@ -226,8 +229,12 @@ def excel_copy(self):
                                                 os.path.basename(file_name)
                                                 .replace("_機能名", "_" + self.parent.input_kinoname.text())
                                                 .replace("機能ID", self.parent.input_kinoid.text()))
-                shutil.copyfile(os.path.join(self.parent.input_browse.text(),
-                                             file_name), destination_file)
+                try:
+                    shutil.copyfile(os.path.join(self.parent.input_browse.text(), file_name), destination_file)
+                except OSError as e:
+                    set_message_box("CRITICAL", "ファイル",
+                                    f"ファイル「 {e.filename} 」のコピー中にエラー「 {e.strerror} 」が発生しました。")
+                    raise
                 EXCEL_LISTS_DES.append(destination_file)
                 i += 1
     if i < len(EXCEL_LISTS):
@@ -377,11 +384,15 @@ class EventHandler:
             print("Caught an exception in some_method:", e)
             return
         self.parent.progress_bar.setValue(10)
-        excel_copy(self)
+        try:
+            excel_copy(self)
+        except Exception as e:
+            print("Caught an exception in some_method:", e)
+        return
         self.parent.progress_bar.setValue(20)
         excel_format(self)
         self.parent.progress_bar.setValue(100)
-        set_message_box("QUESTION", "完成", "成果物フォルダが生成完了。")
+        set_message_box("INFO", "完成", "成果物フォルダが生成完了。")
 
         self.parent.save_button.setDisabled(False)
 
