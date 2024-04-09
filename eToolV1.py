@@ -10,7 +10,8 @@ import openpyxl
 from PyQt5.QtCore import QDateTime, Qt, QTimer, QRect
 from PyQt5.QtGui import QPen, QColor, QBrush, QFont, QPainter
 from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QProgressBar, \
-    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction, QCheckBox, QRadioButton, QSlider
+    QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction, QCheckBox, QRadioButton, QSlider, \
+    QComboBox, QSizePolicy
 from openpyxl.styles import Alignment
 
 # [Paths]
@@ -23,6 +24,12 @@ from openpyxl.styles import Alignment
 # input_tantousya = 王永盛
 # input_system = CIS
 
+ENABILITY_SYSTEM = [
+    'Enability Cis',
+    'Enability Order',
+    'Enability Portal',
+    'Enability Portal2'
+]
 
 FOLDER_LOG = "LOG"
 FOLDER_COVERAGE = "カバレッジ"
@@ -127,8 +134,8 @@ def save_file_paths(self):
         config.set('Inputs', 'input_kinoname', self.parent.input_kinoname.text())
     if self.parent.input_tantousya.text():
         config.set('Inputs', 'input_tantousya', self.parent.input_tantousya.text())
-    if self.parent.input_system.text():
-        config.set('Inputs', 'input_system', self.parent.input_system.text())
+    if self.parent.input_system.currentText():
+        config.set('Inputs', 'input_system', self.parent.input_system.currentText())
     with open(get_config_file_path(), 'w', encoding='utf-8') as configfile:
         config.write(configfile)
 
@@ -173,6 +180,8 @@ def set_message_box(message_type, title, context):
         QMessageBox.critical(None, title, context)
     if message_type == 'INFO':
         QMessageBox.information(None, title, context)
+    if message_type == 'QUESTION':
+        QMessageBox.question(None, title, context)
 
 
 def folder_create(self):
@@ -180,7 +189,7 @@ def folder_create(self):
     try:
         os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text()))
     except FileExistsError:
-        set_message_box("CRITICAL", "フォルダ", "フォルダがすでに存在します。")
+        set_message_box("CRITICAL", "フォルダ", "フォルダ「" + self.parent.input_kinoid.text() + "」がすでに存在します。")
         raise
     except OSError as e:
         set_message_box("INFO", "フォルダ", e)
@@ -329,7 +338,7 @@ class EventHandler:
                 print("folder_path", folder_path)
                 self.parent.input_browse.setText(folder_path)
                 set_message_box("INFO", "注意", "サンプルフォルダをSVNから最新版に更新する必要があります。")
-                # svn_operate(self)
+                svn_operate(self)
         except OSError as e:
             print("An error occurred : ", e)
             raise
@@ -372,6 +381,7 @@ class EventHandler:
         self.parent.progress_bar.setValue(20)
         excel_format(self)
         self.parent.progress_bar.setValue(100)
+        set_message_box("QUESTION", "完成", "成果物フォルダが生成完了。")
 
         self.parent.save_button.setDisabled(False)
 
@@ -589,6 +599,8 @@ class MyApp(QMainWindow):
         self.top_layout_2 = QHBoxLayout()
         self.top_layout_3 = QHBoxLayout()
         self.top_layout_4 = QHBoxLayout()
+        self.top_layout_5 = QHBoxLayout()
+        self.top_layout_6 = QHBoxLayout()
         self.top_layout = QVBoxLayout()
         self.label_browse = QLabel('サンプル ')
         self.input_browse = QLineEdit()
@@ -608,13 +620,29 @@ class MyApp(QMainWindow):
         self.label_tantousya = QLabel('担当者  ')
         self.input_tantousya = QLineEdit()
         self.input_tantousya.setPlaceholderText('担当者')
+        # self.label_system = QLabel('システム ')
+        # self.label_system.setToolTip('システム名')
+        # self.label_system.setToolTipDuration(2000)
+        # self.input_system = QLineEdit()
+        # self.input_system.setToolTip('ここではシステム名を記入してください。')
+        # self.input_system.setToolTipDuration(2000)
+        # self.input_system.setPlaceholderText('システム')
         self.label_system = QLabel('システム ')
-        self.label_system.setToolTip('システム名')
-        self.label_system.setToolTipDuration(2000)
-        self.input_system = QLineEdit()
-        self.input_system.setToolTip('ここではシステム名を記入してください。')
-        self.input_system.setToolTipDuration(2000)
-        self.input_system.setPlaceholderText('システム')
+        self.input_system = QComboBox()
+        self.input_system.addItems(ENABILITY_SYSTEM)
+        self.input_system.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        self.radio_btn1 = QRadioButton('ディフォルト', self)
+        self.radio_btn1.setChecked(True)
+        self.radio_btn1.toggled.connect(self.on_radio_button_toggled)
+        self.radio_btn2 = QRadioButton('キーボード', self)
+        self.radio_btn2.toggled.connect(self.on_radio_button_toggled)
+
+        self.label_combox_kinoid = QLabel('機能ID  ')
+        self.input_combox_kinoid = QComboBox()
+        self.input_combox_kinoid.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.label_combox_kinoname = QLabel('機能名  ')
+        self.input_combox_kinoname = QLineEdit()
 
         self.top_layout_1.addWidget(self.label_browse)
         self.top_layout_1.addWidget(self.input_browse)
@@ -626,22 +654,33 @@ class MyApp(QMainWindow):
         self.top_layout_3.addWidget(self.input_kinoid)
         self.top_layout_3.addWidget(self.label_kinoname)
         self.top_layout_3.addWidget(self.input_kinoname)
-        self.top_layout_4.addWidget(self.label_tantousya)
-        self.top_layout_4.addWidget(self.input_tantousya)
-        self.top_layout_4.addWidget(self.label_system)
-        self.top_layout_4.addWidget(self.input_system)
+
+        self.top_layout_4.addWidget(self.radio_btn1)
+        self.top_layout_4.addWidget(self.radio_btn2)
+
+        self.top_layout_5.addWidget(self.label_combox_kinoid)
+        self.top_layout_5.addWidget(self.input_combox_kinoid)
+        self.top_layout_5.addWidget(self.label_combox_kinoname)
+        self.top_layout_5.addWidget(self.input_combox_kinoname)
+
+        self.top_layout_6.addWidget(self.label_tantousya)
+        self.top_layout_6.addWidget(self.input_tantousya)
+        self.top_layout_6.addWidget(self.label_system)
+        self.top_layout_6.addWidget(self.input_system)
 
         self.top_layout.addLayout(self.top_layout_1)
         self.top_layout.addLayout(self.top_layout_2)
         self.top_layout.addLayout(self.top_layout_3)
-        self.top_layout.addLayout(self.top_layout_4)
+        # self.top_layout.addLayout(self.top_layout_4)
+        # self.top_layout.addLayout(self.top_layout_5)
+        self.top_layout.addLayout(self.top_layout_6)
         self.top_group.setLayout(self.top_layout)
 
         self.button_group = QGroupBox("操作")
         self.button_layout = QHBoxLayout()
         self.exec_button = QPushButton('実行')
         self.save_button = QPushButton('出力フォルダを開く')
-        self.save_button.setDisabled(True)
+        # self.save_button.setDisabled(True)
         self.exit_button = QPushButton('退出')
         self.exit_button.setStyleSheet("background-color: lightgray")
 
@@ -667,9 +706,9 @@ class MyApp(QMainWindow):
         self.tips_group.setLayout(self.tips_layout)
 
         self.main_layout = QVBoxLayout()
-        self.main_layout.addWidget(self.top_group)
-        self.main_layout.addWidget(self.button_group)
-        self.main_layout.addWidget(self.tips_group)
+        self.main_layout.addWidget(self.top_group, 5)
+        self.main_layout.addWidget(self.button_group, 1)
+        self.main_layout.addWidget(self.tips_group, 1)
 
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu('操作')
@@ -680,7 +719,7 @@ class MyApp(QMainWindow):
 
         self.open_action = QAction('報告を開く', self)
         file_menu.addAction(self.open_action)
-        self.open_action.setEnabled(False)
+        # self.open_action.setEnabled(False)
         self.open_action.setShortcut('Alt+O')
 
         self.exit_action = QAction('退出', self)
@@ -700,8 +739,8 @@ class MyApp(QMainWindow):
         self.setCentralWidget(central_widget)
         self.setLayout(self.main_layout)
         self.setWindowTitle('BIP-成果物作成-Ver.1.0-Powered by PyQt5')
-        self.setGeometry(650, 350, 600, 300)
-        self.setFixedSize(600, 300)
+        self.setGeometry(650, 350, 600, 350)
+        self.setFixedSize(600, 350)
         self.event_handler = EventHandler(self)
         self.init_ui()
 
@@ -735,7 +774,7 @@ class MyApp(QMainWindow):
         if INPUT_TANTOUSYA is not None:
             self.input_tantousya.setText(INPUT_TANTOUSYA)
         if INPUT_SYSTEM is not None:
-            self.input_system.setText(INPUT_SYSTEM)
+            self.input_system.setCurrentText(INPUT_SYSTEM)
 
     def timer_init(self):
         """タイマーコントロール"""
@@ -758,6 +797,15 @@ class MyApp(QMainWindow):
         print('光标离开，文本为:', text)
         # 调用父类的 focusOutEvent 方法，以确保事件能够正常处理
         QLineEdit.focusOutEvent(self.input_tantousya, event)
+
+    def on_radio_button_toggled(self):
+        selected_option = None
+        if self.radio_btn1.isChecked():
+            selected_option = 'Option 1'
+        elif self.radio_btn2.isChecked():
+            selected_option = 'Option 2'
+
+        # self.label.setText(f'Selected option: {selected_option}')
 
 
 if __name__ == '__main__':
