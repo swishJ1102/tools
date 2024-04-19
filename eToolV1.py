@@ -13,6 +13,9 @@ from PyQt5.QtWidgets import QApplication, QGroupBox, QHBoxLayout, QLabel, QLineE
     QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox, QMainWindow, QAction, QCheckBox, QRadioButton, QSlider, \
     QComboBox, QSizePolicy
 from openpyxl.styles import Alignment
+import warnings
+
+warnings.simplefilter("ignore")
 
 # [Paths]
 # input_browse = E:/BIP/3開発庫/00移行設計/03移行調査成果物/ドキュメントサンプル
@@ -25,10 +28,14 @@ from openpyxl.styles import Alignment
 # input_system = CIS
 
 ENABILITY_SYSTEM = [
-    'Enability Cis',
-    'Enability Order',
-    'Enability Portal',
-    'Enability Portal2'
+    'EnabilityCis',
+    'EnabilityOrder',
+    'EnabilityPortal',
+    'EnabilityPortal2'
+]
+
+ENABILITY_TYPE = [
+    '画面', 'バッチ', 'API'
 ]
 
 FOLDER_LOG = "LOG"
@@ -36,31 +43,40 @@ FOLDER_COVERAGE = "カバレッジ"
 FOLDER_COMPARE = "現新比較"
 FOLDER_COMPARE_OLD = "現"
 FOLDER_COMPARE_NEW = "新"
+FOLDER_COMPARE_INPUT = "入力"
+FOLDER_COMPARE_OUTPUT = "出力"
 FOLDER_COMPARE_FILE = "ファイル"
 FOLDER_COMPARE_DB = "データ"
 
+EXCEL_REVIEW = "レビュー"
+EXCEL_CD_CHECKLIST = "CDチェックリスト"
+EXCEL_COMPARE = "手修正確認"
+EXCEL_LIST = "成果物一覧"
+EXCEL_UT_CHECKLIST = "UTチェックリスト"
 EXCEL_EVIDENCE = "エビデンス"
 EXCEL_TEST = "単体テスト仕様書"
-EXCEL_COMPARE = "手修正確認"
 EXCEL_COVERAGE = "カバレッジ"
-EXCEL_LIST = "成果物一覧"
-EXCEL_REVIEW = "レビュー"
+
 EXCEL_ALL = [
+    EXCEL_REVIEW,
+    EXCEL_CD_CHECKLIST,
+    EXCEL_COMPARE,
+    EXCEL_LIST,
+    EXCEL_UT_CHECKLIST,
     EXCEL_EVIDENCE,
     EXCEL_TEST,
-    EXCEL_COMPARE,
-    EXCEL_COVERAGE,
-    EXCEL_LIST,
-    EXCEL_REVIEW
+    EXCEL_COVERAGE
 ]
 EXCEL_DHC = "DHC"
 EXCEL_LISTS = [
-    '2_(機能ID_機能名)単体テストエビデンス.xlsx',
-    '2_(機能ID_機能名)単体テスト仕様書.xlsx',
-    '手修正確認.xlsx',
-    'カバレッジ結果に関する補足説明.xlsx',
-    '成果物一覧.xlsx',
-    '0_(機能ID_機能名)レビュー記録表.xlsx'
+    '0_(機能ID_機能名)レビュー記録表',
+    '1_(機能ID_機能名)CDチェックリスト',
+    '1_(機能ID_機能名)手修正確認結果',
+    '1_(機能ID_機能名)成果物一覧',
+    '2_(機能ID_機能名)UTチェックリスト',
+    '2_(機能ID_機能名)単体テストエビデンス',
+    '2_(機能ID_機能名)単体テスト仕様書',
+    '2_カバレッジ結果に関する補足説明'
 ]
 EXCEL_LISTS_DES = []
 
@@ -70,6 +86,7 @@ INPUT_KINOID = ''
 INPUT_KINONAME = ''
 INPUT_TANTOUSYA = ''
 INPUT_SYSTEM = ''
+INPUT_TYPE = ''
 
 # todo
 INPUT_BROWSE_FLAG = ''
@@ -99,13 +116,20 @@ def get_config_file_path():
 def load_config_content(tag):
     """コンフィグをロード"""
     config = ConfigParser()
-    config.read(get_config_file_path(), encoding='utf-8')
+    config_path = get_config_file_path()
+    if os.path.exists(config_path) is False:
+        raise
+    config.read(config_path, encoding='utf-8')
     return config[tag] if tag in config else {}
 
 
 def init_config_content():
-    global INPUT_BROWSE, INPUT_FILE, INPUT_KINOID, INPUT_KINONAME, INPUT_TANTOUSYA, INPUT_SYSTEM
-    paths = load_config_content('Paths')
+    global INPUT_BROWSE, INPUT_FILE, INPUT_KINOID, INPUT_KINONAME, INPUT_TANTOUSYA, INPUT_SYSTEM, INPUT_TYPE
+    try:
+        paths = load_config_content('Paths')
+    except Exception as e:
+        set_message_box("CRITICAL", "コンフィグ", "コンフィグファイルが存在しませんが、チェックしてください。")
+        return
     for path in paths:
         print("path:", path)
     if paths['input_browse'] is not None:
@@ -121,12 +145,17 @@ def init_config_content():
         INPUT_TANTOUSYA = inputs['input_tantousya']
     if inputs['input_system'] is not None:
         INPUT_SYSTEM = inputs['input_system']
+    if inputs['input_type'] is not None:
+        INPUT_TYPE = inputs['input_type']
 
 
 def save_file_paths(self):
     """コンフィグにパスインフォを保存"""
     config = ConfigParser()
-    config.read(get_config_file_path(), encoding='utf-8')
+    config_path = get_config_file_path()
+    if os.path.exists(config_path) is False:
+        return
+    config.read(config_path, encoding='utf-8')
     if self.parent.input_browse.text():
         config.set('Paths', 'input_browse', self.parent.input_browse.text())
     if self.parent.input_file.text():
@@ -139,16 +168,21 @@ def save_file_paths(self):
         config.set('Inputs', 'input_tantousya', self.parent.input_tantousya.text())
     if self.parent.input_system.currentText():
         config.set('Inputs', 'input_system', self.parent.input_system.currentText())
+    if self.parent.input_type.currentText():
+        config.set('Inputs', 'input_type', self.parent.input_type.currentText())
     with open(get_config_file_path(), 'w', encoding='utf-8') as configfile:
         config.write(configfile)
 
 
 def save_tag_context(self, tag, label):
     config = ConfigParser()
-    config.read(get_config_file_path(), encoding='utf-8')
+    config_path = get_config_file_path()
+    if os.path.exists(config_path) is False:
+        return
+    config.read(config_path, encoding='utf-8')
     label_text = getattr(self, label).text()
     config.set(tag, label, label_text)
-    with open(get_config_file_path(), 'w', encoding='utf-8') as configfile:
+    with open(config_path, 'w', encoding='utf-8') as configfile:
         config.write(configfile)
 
 
@@ -190,47 +224,105 @@ def set_message_box(message_type, title, context):
 def folder_create(self):
     """フォルダを作成"""
     try:
-        os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text()))
+        os.makedirs(os.path.join(self.parent.input_file.text(),
+                                 self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text()))
     except FileExistsError:
-        set_message_box("CRITICAL", "フォルダ", "フォルダ「" + self.parent.input_kinoid.text() + "」がすでに存在します。")
+        set_message_box("CRITICAL", "フォルダ",
+                        "フォルダ「" + self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text() + "」がすでに存在します。")
         raise
     except OSError as e:
-        set_message_box("INFO", "フォルダ", e)
+        set_message_box("INFO", "フォルダ", e.strerror)
         raise
     os.makedirs(os.path.join(self.parent.input_file.text(),
-                             self.parent.input_kinoid.text(), FOLDER_COVERAGE))
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COVERAGE))
     os.makedirs(os.path.join(self.parent.input_file.text(),
-                             self.parent.input_kinoid.text(), FOLDER_LOG))
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(), FOLDER_LOG))
     os.makedirs(os.path.join(self.parent.input_file.text(),
-                             self.parent.input_kinoid.text(), FOLDER_COMPARE))
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(), FOLDER_LOG,
+                             FOLDER_COMPARE_NEW))
     os.makedirs(os.path.join(self.parent.input_file.text(),
-                             self.parent.input_kinoid.text(), FOLDER_COMPARE, FOLDER_COMPARE_OLD))
-    os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(),
-                             FOLDER_COMPARE, FOLDER_COMPARE_OLD, FOLDER_COMPARE_FILE))
-    os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(),
-                             FOLDER_COMPARE, FOLDER_COMPARE_OLD, FOLDER_COMPARE_DB))
-    os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(), FOLDER_LOG,
+                             FOLDER_COMPARE_OLD))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(), FOLDER_COMPARE))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(), FOLDER_COMPARE,
+                             FOLDER_COMPARE_OLD))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(), FOLDER_COMPARE,
+                             FOLDER_COMPARE_OLD,
+                             FOLDER_COMPARE_INPUT))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(), FOLDER_COMPARE,
+                             FOLDER_COMPARE_OLD,
+                             FOLDER_COMPARE_OUTPUT))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COMPARE, FOLDER_COMPARE_OLD, FOLDER_COMPARE_INPUT, FOLDER_COMPARE_FILE))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COMPARE, FOLDER_COMPARE_OLD, FOLDER_COMPARE_INPUT, FOLDER_COMPARE_DB))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COMPARE, FOLDER_COMPARE_OLD, FOLDER_COMPARE_OUTPUT, FOLDER_COMPARE_FILE))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COMPARE, FOLDER_COMPARE_OLD, FOLDER_COMPARE_OUTPUT, FOLDER_COMPARE_DB))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
                              FOLDER_COMPARE, FOLDER_COMPARE_NEW))
-    os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(),
-                             FOLDER_COMPARE, FOLDER_COMPARE_NEW, FOLDER_COMPARE_FILE))
-    os.makedirs(os.path.join(self.parent.input_file.text(), self.parent.input_kinoid.text(),
-                             FOLDER_COMPARE, FOLDER_COMPARE_NEW, FOLDER_COMPARE_DB))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COMPARE, FOLDER_COMPARE_NEW, FOLDER_COMPARE_INPUT))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COMPARE, FOLDER_COMPARE_NEW, FOLDER_COMPARE_OUTPUT))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COMPARE, FOLDER_COMPARE_NEW, FOLDER_COMPARE_INPUT, FOLDER_COMPARE_FILE))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COMPARE, FOLDER_COMPARE_NEW, FOLDER_COMPARE_INPUT, FOLDER_COMPARE_DB))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COMPARE, FOLDER_COMPARE_NEW, FOLDER_COMPARE_OUTPUT, FOLDER_COMPARE_FILE))
+    os.makedirs(os.path.join(self.parent.input_file.text(),
+                             self.parent.input_kinoid.text() + "_" + self.parent.input_kinoname.text(),
+                             FOLDER_COMPARE, FOLDER_COMPARE_NEW, FOLDER_COMPARE_OUTPUT, FOLDER_COMPARE_DB))
 
 
 def excel_copy(self):
     """サンプルからファイルをコピー"""
     i = 0
     file_names = os.listdir(self.parent.input_browse.text())
-    for file_name in file_names:
-        for module_name in EXCEL_ALL:
-            if file_name.find(module_name) >= 0:
+    for module_name in EXCEL_ALL:
+        for file_name in file_names:
+            if file_name.find(module_name) >= 0 and file_name.find("~$") == -1:
+                if module_name == EXCEL_TEST:
+                    if self.parent.input_type.currentText() != "画面" and \
+                            file_name.find(self.parent.input_type.currentText()) == -1:
+                        continue
+                    if self.parent.input_type.currentText() == "画面" and \
+                            (file_name.find("バッチ") > 0 or file_name.find("API") > 0):
+                        continue
+                source_file_path = os.path.join(self.parent.input_browse.text(), file_name)
+                # if module_name == EXCEL_TEST and self.parent.input_type.currentText() != "画面":
+                #     source_file_path = os.path.join(self.parent.input_browse.text(),
+                #                                     file_name.split('.')[0] + "_" +
+                #                                     self.parent.input_type.currentText() + '.xlsx')
+                # else:
+                #     source_file_path = os.path.join(self.parent.input_browse.text(), file_name)
+
                 destination_file = os.path.join(self.parent.input_file.text(),
-                                                self.parent.input_kinoid.text(),
+                                                self.parent.input_kinoid.text() +
+                                                "_" + self.parent.input_kinoname.text(),
                                                 os.path.basename(file_name)
                                                 .replace("_機能名", "_" + self.parent.input_kinoname.text())
-                                                .replace("機能ID", self.parent.input_kinoid.text()))
+                                                .replace("機能ID", self.parent.input_kinoid.text())
+                                                .replace("_バッチ", "").replace("_API", ""))
                 try:
-                    shutil.copyfile(os.path.join(self.parent.input_browse.text(), file_name), destination_file)
+                    shutil.copyfile(source_file_path, destination_file)
                 except OSError as e:
                     set_message_box("CRITICAL", "ファイル",
                                     f"ファイル「 {e.filename} 」のコピー中にエラー「 {e.strerror} 」が発生しました。")
@@ -238,7 +330,7 @@ def excel_copy(self):
                 EXCEL_LISTS_DES.append(destination_file)
                 i += 1
     if i < len(EXCEL_LISTS):
-        set_message_box("INFO", "EXPLORER", "サンプルが足りないので\nチェックしてください。")
+        set_message_box("INFO", "エクスプローラー", "サンプルが足りないので\nチェックしてください。")
 
 
 def column_letter_to_number(column_letter):
@@ -265,6 +357,14 @@ def excel_format_evidence(self, path):
     ws.cell(row=2, column=column_letter_to_number("AM")).alignment = align
     ws.cell(row=3, column=column_letter_to_number("AM")).alignment = align
 
+    ws.cell(row=2, column=column_letter_to_number("F")).value = self.parent.input_system.currentText()
+    ws.cell(row=2, column=column_letter_to_number("F")).alignment = align
+    ws.cell(row=2, column=column_letter_to_number("B")).alignment = align
+
+    ws.cell(row=2, column=column_letter_to_number("P")).value = self.parent.input_type.currentText()
+    ws.cell(row=2, column=column_letter_to_number("P")).alignment = align
+    ws.cell(row=2, column=column_letter_to_number("M")).alignment = align
+
     align = Alignment(vertical='center')
     ws.cell(row=2, column=column_letter_to_number("AI")).value = EXCEL_DHC + self.parent.input_tantousya.text()
     ws.cell(row=2, column=column_letter_to_number("AI")).alignment = align
@@ -283,13 +383,48 @@ def excel_format_evidence(self, path):
     wb.close()
 
 
+def excel_format_left(self, path):
+    wb = openpyxl.load_workbook(path)
+    if path.find(EXCEL_COVERAGE) > 0:
+        ws = wb['補足説明']
+    if path.find(EXCEL_LIST) > 0:
+        ws = wb['成果物一覧']
+    align = Alignment(vertical='center', horizontal='center')
+    ws.cell(row=1, column=column_letter_to_number("C")).value = self.parent.input_system.currentText()
+    ws.cell(row=1, column=column_letter_to_number("C")).alignment = align
+    ws.cell(row=2, column=column_letter_to_number("C")).value = self.parent.input_kinoid.text()
+    ws.cell(row=2, column=column_letter_to_number("C")).alignment = align
+    ws.cell(row=3, column=column_letter_to_number("C")).value = self.parent.input_kinoname.text()
+    ws.cell(row=3, column=column_letter_to_number("C")).alignment = align
+
+    ws.cell(row=1, column=column_letter_to_number("A")).alignment = align
+    ws.cell(row=2, column=column_letter_to_number("A")).alignment = align
+    ws.cell(row=3, column=column_letter_to_number("A")).alignment = align
+
+    wb.save(path)
+    wb.close()
+
+
 def excel_format(self):
     """担当者、機能ID、機能名"""
     for excel in EXCEL_LISTS_DES:
-        if excel.find(EXCEL_EVIDENCE) > 0:
-            excel_format_evidence(self, excel)
-        if excel.find(EXCEL_TEST) > 0:
-            excel_format_evidence(self, excel)
+        # if excel.find(EXCEL_EVIDENCE) > 0:
+        #     excel_format_evidence(self, excel)
+        # if excel.find(EXCEL_TEST) > 0:
+        #     excel_format_evidence(self, excel)
+        if excel.find(EXCEL_CD_CHECKLIST) > 0 or \
+                excel.find(EXCEL_COMPARE) > 0 or \
+                excel.find(EXCEL_UT_CHECKLIST) > 0:
+            continue
+        if excel.find(EXCEL_LIST) > 0 or excel.find(EXCEL_COVERAGE) > 0:
+            excel_format_left(self, excel)
+            if self.parent.progress_bar.value() >= 90:
+                self.parent.progress_bar.setValue(100)
+            else:
+                self.parent.progress_bar.setValue(self.parent.progress_bar.value() + 10)
+            continue
+        excel_format_evidence(self, excel)
+
         if self.parent.progress_bar.value() >= 90:
             self.parent.progress_bar.setValue(100)
         else:
@@ -381,14 +516,14 @@ class EventHandler:
         try:
             folder_create(self)
         except Exception as e:
-            print("Caught an exception in some_method:", e)
+            print("Caught an exception in folder_create:", e)
             return
         self.parent.progress_bar.setValue(10)
         try:
             excel_copy(self)
         except Exception as e:
-            print("Caught an exception in some_method:", e)
-        return
+            print("Caught an exception in excel_copy:", e)
+            return
         self.parent.progress_bar.setValue(20)
         excel_format(self)
         self.parent.progress_bar.setValue(100)
@@ -638,6 +773,10 @@ class MyApp(QMainWindow):
         # self.input_system.setToolTip('ここではシステム名を記入してください。')
         # self.input_system.setToolTipDuration(2000)
         # self.input_system.setPlaceholderText('システム')
+        self.label_type = QLabel('区分')
+        self.input_type = QComboBox()
+        self.input_type.addItems(ENABILITY_TYPE)
+        self.input_type.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.label_system = QLabel('システム ')
         self.input_system = QComboBox()
         self.input_system.addItems(ENABILITY_SYSTEM)
@@ -676,6 +815,8 @@ class MyApp(QMainWindow):
 
         self.top_layout_6.addWidget(self.label_tantousya)
         self.top_layout_6.addWidget(self.input_tantousya)
+        self.top_layout_6.addWidget(self.label_type)
+        self.top_layout_6.addWidget(self.input_type)
         self.top_layout_6.addWidget(self.label_system)
         self.top_layout_6.addWidget(self.input_system)
 
@@ -743,7 +884,7 @@ class MyApp(QMainWindow):
         config_menu.addAction(self.config_action)
         self.config_action.setShortcut('Ctrl+I')
 
-        # self.config_action.setDisabled(True)
+        self.config_action.setDisabled(True)
 
         central_widget = QWidget()
         central_widget.setLayout(self.main_layout)
@@ -786,6 +927,8 @@ class MyApp(QMainWindow):
             self.input_tantousya.setText(INPUT_TANTOUSYA)
         if INPUT_SYSTEM is not None:
             self.input_system.setCurrentText(INPUT_SYSTEM)
+        if INPUT_TYPE is not None:
+            self.input_type.setCurrentText(INPUT_TYPE)
 
     def timer_init(self):
         """タイマーコントロール"""
