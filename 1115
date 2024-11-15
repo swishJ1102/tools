@@ -1,3 +1,88 @@
+将 content.js 修改为使用 Canvas 来控制视频播放速度，需要将视频绘制到 Canvas 上，并使用 JavaScript 手动控制其帧率。这种方法会绕过直接更改 video 元素的 playbackRate 属性，从而可能避开某些网站的检测机制。
+
+以下是一个基本的实现步骤和代码示例：
+
+1. 修改 content.js
+
+在 content.js 中，首先找到页面上的 <video> 元素，然后创建一个 Canvas 元素来显示视频内容。通过控制 Canvas 的刷新速率，可以实现倍速播放。
+
+// content.js
+
+// 找到页面中的第一个视频元素
+const video = document.querySelector("video");
+
+if (video) {
+  // 创建 Canvas 元素
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  // 将 Canvas 尺寸设置为与视频一致
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  // 隐藏原始视频元素，并将 Canvas 添加到视频所在的父元素中
+  video.style.display = "none";
+  video.parentNode.insertBefore(canvas, video);
+
+  // 默认播放速度
+  let playbackRate = 1.0;
+
+  // 定义一个函数用于绘制视频到 Canvas，并控制速度
+  function drawVideoFrame() {
+    // 如果视频暂停或结束，不再继续绘制
+    if (video.paused || video.ended) return;
+
+    // 将视频帧绘制到 Canvas 上
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // 控制帧速率（帧率 = 默认帧率 * 播放速度）
+    setTimeout(drawVideoFrame, 1000 / (30 * playbackRate)); // 30 为每秒帧数
+  }
+
+  // 播放视频并开始绘制
+  video.play();
+  drawVideoFrame();
+
+  // 监听来自 popup 的消息来设置播放速度
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "setSpeed") {
+      playbackRate = request.speed;
+      sendResponse({ status: "success" });
+    }
+  });
+}
+
+2. 在 popup.js 中发送播放速度
+
+保持 popup.js 不变，当用户输入播放速度后，它会将倍速信息发送到 content.js。
+
+// popup.js
+
+document.getElementById("setSpeedBtn").addEventListener("click", () => {
+  const speed = parseFloat(document.getElementById("speed").value);
+
+  if (!isNaN(speed) && speed > 0) {
+    // 向 content.js 发送消息
+    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+      chrome.tabs.sendMessage(tabs[0].id, { action: "setSpeed", speed: speed });
+    });
+  } else {
+    alert("Please enter a valid speed.");
+  }
+});
+
+解释
+
+	•	视频隐藏：原视频被隐藏，避免在页面上显示，改用 Canvas 绘制视频内容。
+	•	手动控制帧率：setTimeout 用于控制 Canvas 的刷新速率，使其达到倍速播放的效果。
+	•	动态调整倍速：当用户在 popup.html 中输入倍速后，popup.js 将新的速度发送到 content.js，改变 playbackRate 变量以更新帧率。
+
+注意事项
+
+	1.	这种方法会显著增加浏览器的计算资源开销。
+	2.	视频控件会失效（例如暂停、播放等），需要额外代码来实现这些控件功能。
+	3.	并非所有网站都允许将视频绘制到 Canvas，尤其是一些受版权保护的内容会有额外的浏览器限制。
+
 如果在更改 <video> 标签的播放速度时，导致用户退出登录，可能是因为网站的某些监控或安全机制检测到了视频属性的更改，从而强制退出登录。这通常出现在一些流媒体平台上，以防止用户绕过网站的速度控制或下载限制。以下是一些解决方案，或可以尝试的应对方法：
 
 1. 使用 JavaScript 事件拦截
