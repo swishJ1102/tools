@@ -1,3 +1,73 @@
+如果在更改 <video> 标签的播放速度时，导致用户退出登录，可能是因为网站的某些监控或安全机制检测到了视频属性的更改，从而强制退出登录。这通常出现在一些流媒体平台上，以防止用户绕过网站的速度控制或下载限制。以下是一些解决方案，或可以尝试的应对方法：
+
+1. 使用 JavaScript 事件拦截
+
+一些网站会通过 JavaScript 监听视频元素的属性变化。可以尝试使用事件拦截来避免被检测到：
+
+const videos = document.querySelectorAll("video");
+videos.forEach(video => {
+  // 使用 try-catch 避免报错
+  try {
+    Object.defineProperty(video, 'playbackRate', {
+      set: function (rate) {
+        // 实际设置播放速率
+        this.__playbackRate__ = rate;
+      },
+      get: function () {
+        return this.__playbackRate__ || 1.0;
+      }
+    });
+  } catch (e) {
+    console.error("Playback rate modification not allowed:", e);
+  }
+});
+
+这样做的目的是在不直接设置 playbackRate 的情况下修改播放速度。但这种方法不是总能绕过检测，具体效果视网站的实现而定。
+
+2. 使用插件方式控制速度（如 Video Speed Controller 插件）
+
+一些开源插件（如 Video Speed Controller）能够在浏览器层面控制视频的播放速度，而不是直接操作 HTML 视频元素的属性。你可以安装这样的插件来测试是否可以绕过该检测。
+
+3. 使用 Canvas 绘制
+
+如果视频的速度控制对你非常重要，并且不介意采用较复杂的方案，可以尝试将视频流绘制到 Canvas 元素中，然后使用 Canvas 实现播放控制。以下是一个简单的示例：
+
+const video = document.querySelector("video");
+const canvas = document.createElement("canvas");
+const ctx = canvas.getContext("2d");
+
+// 设置 canvas 尺寸与视频相同
+canvas.width = video.videoWidth;
+canvas.height = video.videoHeight;
+
+document.body.appendChild(canvas);
+
+// 播放视频并绘制到 Canvas
+function playVideoOnCanvas() {
+  if (video.paused || video.ended) return;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  setTimeout(playVideoOnCanvas, 1000 / (30 * playbackRate));  // 控制帧率
+}
+
+// 控制播放速度
+let playbackRate = 1.5; // 设置想要的倍速
+video.play();
+playVideoOnCanvas();
+
+这种方法虽然较为复杂，但可以在一些平台上绕过速度限制。不过，它会占用更多资源并且牺牲原视频控件的功能。
+
+4. 请求服务器返回不同速率的流
+
+对于一些流媒体服务平台，有时可以直接请求服务器返回不同速度的视频流。通常需要访问网站的 API 调用，然后通过相关接口参数请求不同速率的流。
+
+5. 使用沙盒环境进行测试
+
+可以考虑在一个隔离的沙盒或开发环境中进行测试，以确保对目标网站的影响最小。
+
+希望这些方法可以帮助你实现需求，具体效果还取决于目标网站的检测机制。
+
+
+
 要实现一个可以调整视频播放速度的网页插件（如 Chrome 插件），你可以使用 JavaScript 结合浏览器扩展 API。以下是实现该功能的基本步骤：
 
 1. 准备项目文件
