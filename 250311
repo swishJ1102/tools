@@ -1,62 +1,85 @@
-import com.github.javaparser.*;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import com.github.javaparser.symbolsolver.JavaSymbolSolver;
+import com.github.javaparser.symbolsolver.model.resolution.SymbolReference;
+import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.*;
 
-public class MethodCallAnalyzer {
+public class CallGraphAnalyzer {
+
+    // 保存调用关系：caller方法 -> set(被调用方法)
     private static final Map<String, Set<String>> callGraph = new HashMap<>();
 
     public static void main(String[] args) throws Exception {
-        String projectPath = "your/project/path";  // 替换为你的工程路径
-        File projectDir = new File(projectPath);
-        analyzeProject(projectDir);
+        // 配置类型求解器（这里假设你的源码目录为 "your/project/src"）
+        File srcDir = new File("your/project/src"); // 请替换为实际的源码目录
+        TypeSolver reflectionTypeSolver = new ReflectionTypeSolver();
+        TypeSolver javaParserTypeSolver = new JavaParserTypeSolver(srcDir);
+        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(reflectionTypeSolver, javaParserTypeSolver);
+        JavaSymbolSolver symbolSolver = new JavaSymbolSolver(combinedTypeSolver);
+        StaticJavaParser.getConfiguration().setSymbolResolver(symbolSolver);
+
+        // 遍历整个工程（源码目录下的所有 .java 文件）
+        traverseDirectory(srcDir);
 
         // 输出调用关系
-        callGraph.forEach((caller, callees) -> {
-            System.out.println(caller + " calls: " + callees);
-        });
-    }
-
-    private static void analyzeProject(File projectDir) throws Exception {
-        for (File file : Objects.requireNonNull(projectDir.listFiles())) {
-            if (file.isDirectory()) {
-                analyzeProject(file); // 递归遍历子目录
-            } else if (file.getName().endsWith(".java")) {
-                analyzeFile(file);
+        for (Map.Entry<String, Set<String>> entry : callGraph.entrySet()) {
+            String caller = entry.getKey();
+            for (String callee : entry.getValue()) {
+                System.out.println(caller + " -> " + callee);
             }
         }
     }
 
-    private static void analyzeFile(File file) throws Exception {
-        FileInputStream fis = new FileInputStream(file);
-        CompilationUnit cu = StaticJavaParser.parse(fis);
-
-        // 遍历方法定义
-        cu.findAll(MethodDeclaration.class).forEach(method -> {
-            String className = cu.getPrimaryTypeName().orElse("UnknownClass");
-            String methodName = method.getNameAsString();
-            String fullMethodName = className + "." + methodName;
-
-            // 提取方法调用
-            method.accept(new MethodCallCollector(), fullMethodName);
-        });
-
-        fis.close();
+    // 递归遍历目录下所有 Java 文件
+    private static void traverseDirectory(File directory) throws Exception {
+        for (File file : Objects.requireNonNull(directory.listFiles())) {
+            if (file.isDirectory()) {
+                traverseDirectory(file);
+            } else if (file.getName().endsWith(".java")) {
+                processFile(file);
+            }
+        }
     }
 
-    // 访问者模式：收集方法调用
-    private static class MethodCallCollector extends VoidVisitorAdapter<String> {
-        @Override
-        public void visit(MethodCallExpr methodCall, String callerMethodName) {
-            super.visit(methodCall, callerMethodName);
+    // 解析单个文件，提取方法调用关系
+    private static void processFile(File file) {
+        try (FileInputStream fis = new FileInputStream(file)) {
+            CompilationUnit cu = StaticJavaParser.parse(fis);
 
-            String calledMethod = methodCall.getNameAsString();
-            callGraph.computeIfAbsent(callerMethodName, k -> new HashSet<>()).add(calledMethod);
+            // 遍历文件中的所有方法声明
+            cu.findAll(MethodDeclaration.class).forEach(methodDeclaration -> {
+                try {
+                    // 利用符号求解器解析方法声明，获取调用者的全限定签名
+                    String callerSignature = methodDeclaration.resolve().getQualifiedSignature();
+
+                    // 在该方法体内查找所有方法调用表达式
+                    methodDeclaration.findAll(MethodCallExpr.class).forEach(methodCall -> {
+                        try {
+                            ResolvedMethodDeclaration resolvedCallee = methodCall.resolve();
+                            String calleeSignature = resolvedCallee.getQualifiedSignature();
+                            // 建立调用关系：caller -> callee
+                            callGraph.computeIfAbsent(callerSignature, k -> new HashSet<>()).add(calleeSignature);
+                        } catch (Exception e) {
+                            // 无法解析的调用打印提示（可能涉及动态调用、反射等情况）
+                            System.err.println("无法解析调用: " + methodCall + " - " + e.getMessage());
+                        }
+                    });
+                } catch (Exception e) {
+                    System.err.println("无法解析方法声明: " + methodDeclaration.getNameAsString() + " - " + e.getMessage());
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("处理文件失败: " + file.getAbsolutePath() + " - " + e.getMessage());
         }
     }
 }
