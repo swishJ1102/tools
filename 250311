@@ -14,6 +14,143 @@ import java.util.*;
 
 public class CallGraphAnalyzer {
 
+    private static final Map<String, Set<String>> callGraph = new HashMap<>();
+    private static final String projectPackagePrefix = "com.myproject"; // 替换成你的包名
+    private static final String OUTPUT_FILE = "call_graph.txt"; // 输出文件路径
+    private static CombinedTypeSolver combinedTypeSolver;
+
+    public static void main(String[] args) throws Exception {
+        File srcDir = new File("your/project/src"); // 你的 Java 源码目录
+
+        // 初始化 TypeSolver，确保可以解析整个项目代码
+        combinedTypeSolver = new CombinedTypeSolver();
+        combinedTypeSolver.add(new ReflectionTypeSolver()); // 解析 JDK 类
+        combinedTypeSolver.add(new JavaParserTypeSolver(srcDir)); // 解析 Java 源码
+
+        JavaSymbolSolver symbolSolver = new JavaSymbolSolver(combinedTypeSolver);
+        StaticJavaParser.getConfiguration().setSymbolResolver(symbolSolver);
+
+        // 解析整个工程的调用关系
+        traverseDirectory(srcDir);
+
+        // 将调用关系写入文件
+        writeCallChainsToFile();
+    }
+
+    // 遍历所有 Java 文件
+    private static void traverseDirectory(File directory) throws Exception {
+        for (File file : Objects.requireNonNull(directory.listFiles())) {
+            if (file.isDirectory()) {
+                traverseDirectory(file);
+            } else if (file.getName().endsWith(".java")) {
+                processFile(file);
+            }
+        }
+    }
+
+    // 解析 Java 文件，提取方法调用关系
+    private static void processFile(File file) {
+        try (FileInputStream fis = new FileInputStream(file)) {
+            CompilationUnit cu = StaticJavaParser.parse(fis);
+            cu.findAll(MethodDeclaration.class).forEach(methodDeclaration -> {
+                try {
+                    String callerSignature = methodDeclaration.resolve().getQualifiedSignature();
+
+                    // 解析方法体内所有方法调用
+                    methodDeclaration.findAll(MethodCallExpr.class).forEach(methodCall -> {
+                        try {
+                            ResolvedMethodDeclaration resolvedCallee = methodCall.resolve();
+                            ResolvedReferenceTypeDeclaration declaringType = resolvedCallee.declaringType();
+                            String declaringTypeName = declaringType.getQualifiedName();
+
+                            // 过滤非工程内部的方法
+                            if (!declaringTypeName.startsWith(projectPackagePrefix)) {
+                                return;
+                            }
+
+                            String calleeSignature = resolvedCallee.getQualifiedSignature();
+                            callGraph.computeIfAbsent(callerSignature, k -> new HashSet<>()).add(calleeSignature);
+                        } catch (Exception e) {
+                            System.err.println("解析失败: " + methodCall + " - " + e.getMessage());
+                        }
+                    });
+                } catch (Exception e) {
+                    System.err.println("解析失败: " + methodDeclaration.getNameAsString() + " - " + e.getMessage());
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("处理失败: " + file.getAbsolutePath() + " - " + e.getMessage());
+        }
+    }
+
+    // 写入调用链到文件
+    private static void writeCallChainsToFile() {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(OUTPUT_FILE))) {
+            Set<String> allCallers = new HashSet<>(callGraph.keySet());
+            Set<String> allCallees = new HashSet<>();
+            for (Set<String> callees : callGraph.values()) {
+                allCallees.addAll(callees);
+            }
+
+            // 找到根节点（只作为调用者，不是被调用者）
+            Set<String> roots = new HashSet<>(allCallers);
+            roots.removeAll(allCallees);
+
+            if (roots.isEmpty()) {
+                roots = allCallers; // 可能所有方法都有相互调用
+            }
+
+            for (String root : roots) {
+                writeChain(writer, root, new HashSet<>(), 0);
+            }
+
+            System.out.println("调用关系已写入: " + OUTPUT_FILE);
+        } catch (IOException e) {
+            System.err.println("写入文件失败: " + e.getMessage());
+        }
+    }
+
+    // 递归写入调用链
+    private static void writeChain(BufferedWriter writer, String method, Set<String> visited, int depth) throws IOException {
+        for (int i = 0; i < depth; i++) {
+            writer.write("    ");
+        }
+        writer.write(method + "\n");
+
+        if (visited.contains(method)) {
+            return;
+        }
+        visited.add(method);
+
+        Set<String> callees = callGraph.get(method);
+        if (callees != null) {
+            for (String callee : callees) {
+                writeChain(writer, callee, new HashSet<>(visited), depth + 1);
+            }
+        }
+    }
+}
+
+
+
+
+
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.symbolsolver.JavaSymbolSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
+
+import java.io.*;
+import java.util.*;
+
+public class CallGraphAnalyzer {
+
     // 存储调用关系：caller 方法 -> 被调用方法集合
     private static final Map<String, Set<String>> callGraph = new HashMap<>();
     private static final String projectPackagePrefix = "com.myproject"; // 请修改为你工程的包名
