@@ -3,6 +3,145 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.util.*;
+
+public class CallGraphAnalyzer {
+
+    // 保存调用关系：caller方法的全限定签名 -> set(被调用方法的全限定签名)
+    private static final Map<String, Set<String>> callGraph = new HashMap<>();
+    // 请修改为你工程内代码的包名前缀，如 "com.myproject"；不符合条件的调用会被过滤掉
+    private static final String projectPackagePrefix = "com.myproject";
+
+    public static void main(String[] args) throws Exception {
+        // 设定源码目录，替换为你实际的源码路径
+        File srcDir = new File("your/project/src");
+        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
+        combinedTypeSolver.add(new ReflectionTypeSolver());
+        combinedTypeSolver.add(new JavaParserTypeSolver(srcDir));
+
+        JavaSymbolSolver symbolSolver = new JavaSymbolSolver(combinedTypeSolver);
+        StaticJavaParser.getConfiguration().setSymbolResolver(symbolSolver);
+
+        // 遍历整个工程的 .java 文件，构建调用关系图
+        traverseDirectory(srcDir);
+
+        // 输出调用关系：从根节点开始层级打印调用链
+        printCallChains();
+    }
+
+    // 递归遍历目录下所有 Java 文件
+    private static void traverseDirectory(File directory) throws Exception {
+        for (File file : Objects.requireNonNull(directory.listFiles())) {
+            if (file.isDirectory()) {
+                traverseDirectory(file);
+            } else if (file.getName().endsWith(".java")) {
+                processFile(file);
+            }
+        }
+    }
+
+    // 解析单个文件，提取方法调用关系
+    private static void processFile(File file) {
+        try (FileInputStream fis = new FileInputStream(file)) {
+            CompilationUnit cu = StaticJavaParser.parse(fis);
+            // 遍历当前文件中的所有方法声明
+            cu.findAll(MethodDeclaration.class).forEach(methodDeclaration -> {
+                try {
+                    // resolve() 获取调用者方法的全限定签名
+                    String callerSignature = methodDeclaration.resolve().getQualifiedSignature();
+
+                    // 遍历该方法体内的所有方法调用表达式
+                    methodDeclaration.findAll(MethodCallExpr.class).forEach(methodCall -> {
+                        try {
+                            ResolvedMethodDeclaration resolvedCallee = methodCall.resolve();
+                            // 过滤掉外部调用：判断被调用方法的声明类是否属于工程内代码
+                            ResolvedReferenceTypeDeclaration declaringType = resolvedCallee.declaringType();
+                            String declaringTypeName = declaringType.getQualifiedName();
+                            if (!declaringTypeName.startsWith(projectPackagePrefix)) {
+                                // 如果不是以项目包名前缀开始，则认为是外部调用，忽略掉
+                                return;
+                            }
+                            String calleeSignature = resolvedCallee.getQualifiedSignature();
+                            // 建立调用关系：caller -> callee
+                            callGraph.computeIfAbsent(callerSignature, k -> new HashSet<>()).add(calleeSignature);
+                        } catch (Exception e) {
+                            // 对于无法解析的调用打印提示（例如动态调用、反射等情况）
+                            System.err.println("无法解析调用: " + methodCall + " - " + e.getMessage());
+                        }
+                    });
+                } catch (Exception e) {
+                    System.err.println("无法解析方法声明: " + methodDeclaration.getNameAsString() + " - " + e.getMessage());
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("处理文件失败: " + file.getAbsolutePath() + " - " + e.getMessage());
+        }
+    }
+
+    // 打印调用链：先找出根节点（没有作为被调用者出现的方法），然后递归打印整个调用链
+    private static void printCallChains() {
+        // 收集所有调用者和被调用者
+        Set<String> allCallers = new HashSet<>(callGraph.keySet());
+        Set<String> allCallees = new HashSet<>();
+        for (Set<String> callees : callGraph.values()) {
+            allCallees.addAll(callees);
+        }
+        // 根节点：只出现在调用者中，但不作为被调用者出现
+        Set<String> roots = new HashSet<>(allCallers);
+        roots.removeAll(allCallees);
+
+        // 如果没有根节点，则所有节点可能都有循环调用，直接全部输出
+        if (roots.isEmpty()) {
+            roots = allCallers;
+        }
+
+        for (String root : roots) {
+            printChain(root, new HashSet<>(), 0);
+        }
+    }
+
+    // 递归打印调用链，visited 用于防止无限循环
+    private static void printChain(String method, Set<String> visited, int depth) {
+        // 缩进显示层级
+        for (int i = 0; i < depth; i++) {
+            System.out.print("    ");
+        }
+        System.out.println(method);
+
+        // 如果已经访问过该节点，则避免循环（这里每条链单独复制 visited 集合）
+        if (visited.contains(method)) {
+            return;
+        }
+        visited.add(method);
+
+        // 递归遍历该方法调用的所有被调用方法
+        Set<String> callees = callGraph.get(method);
+        if (callees != null) {
+            for (String callee : callees) {
+                printChain(callee, new HashSet<>(visited), depth + 1);
+            }
+        }
+    }
+}
+
+
+
+
+
+
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.model.resolution.SymbolReference;
 import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
