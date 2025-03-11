@@ -3,6 +3,118 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
+import com.github.javaparser.symbolsolver.model.resolution.SymbolReference;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
+
+import java.io.*;
+import java.util.*;
+
+public class CallGraphAnalyzer {
+    private static final Map<String, Set<String>> callGraph = new HashMap<>();
+    private static final String projectPackagePrefix = "com.myproject"; // 你的工程包名
+    private static final String OUTPUT_FILE = "call_graph.txt"; // 输出文件路径
+    private static CombinedTypeSolver combinedTypeSolver;
+
+    public static void main(String[] args) throws Exception {
+        File srcDir = new File("your/project/src"); // **确保这是你的 src 目录**
+        System.out.println("✅ JavaParserTypeSolver 解析路径: " + srcDir.getAbsolutePath());
+
+        combinedTypeSolver = new CombinedTypeSolver();
+        combinedTypeSolver.add(new ReflectionTypeSolver(false)); // 解析 JDK 类
+        combinedTypeSolver.add(new JavaParserTypeSolver(srcDir)); // 解析 Java 源码
+
+        JavaSymbolSolver symbolSolver = new JavaSymbolSolver(combinedTypeSolver);
+        StaticJavaParser.getConfiguration().setSymbolResolver(symbolSolver);
+
+        System.out.println("🔍 开始解析工程...");
+        traverseDirectory(srcDir);
+        System.out.println("✅ 解析完成！正在写入调用关系...");
+
+        writeCallChainsToFile();
+        System.out.println("📄 调用关系已写入: " + OUTPUT_FILE);
+    }
+
+    private static void traverseDirectory(File directory) throws Exception {
+        for (File file : Objects.requireNonNull(directory.listFiles())) {
+            if (file.isDirectory()) {
+                traverseDirectory(file);
+            } else if (file.getName().endsWith(".java")) {
+                processFile(file);
+            }
+        }
+    }
+
+    private static void processFile(File file) {
+        System.out.println("📂 正在解析文件: " + file.getName());
+        try (FileInputStream fis = new FileInputStream(file)) {
+            CompilationUnit cu = StaticJavaParser.parse(fis);
+            cu.findAll(MethodDeclaration.class).forEach(methodDeclaration -> {
+                try {
+                    String callerSignature = methodDeclaration.resolve().getQualifiedSignature();
+
+                    methodDeclaration.findAll(MethodCallExpr.class).forEach(methodCall -> {
+                        try {
+                            System.out.println("🔍 AST 方法调用: " + methodCall);
+                            System.out.println("🔍 方法所属类: " + methodCall.getScope().orElse(null));
+
+                            SymbolReference<ResolvedMethodDeclaration> ref = combinedTypeSolver.tryToSolveMethod(
+                                    "com.myproject.B", "methodX"
+                            );
+                            if (!ref.isSolved()) {
+                                System.err.println("⚠️ `methodX()` 解析失败，跳过");
+                                return;
+                            }
+
+                            ResolvedMethodDeclaration resolvedCallee = methodCall.resolve();
+                            ResolvedReferenceTypeDeclaration declaringType = resolvedCallee.declaringType();
+                            String declaringTypeName = declaringType.getQualifiedName();
+
+                            if (!declaringTypeName.startsWith(projectPackagePrefix)) {
+                                return;
+                            }
+
+                            String calleeSignature = resolvedCallee.getQualifiedSignature();
+                            callGraph.computeIfAbsent(callerSignature, k -> new HashSet<>()).add(calleeSignature);
+
+                            System.out.println("🔗 " + callerSignature + " 调用了 " + calleeSignature);
+                        } catch (Exception e) {
+                            System.err.println("⚠️ 方法解析失败: " + methodCall + " - " + e.getMessage());
+                        }
+                    });
+                } catch (Exception e) {
+                    System.err.println("❌ 方法声明解析失败: " + methodDeclaration.getNameAsString() + " - " + e.getMessage());
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("❌ 处理失败: " + file.getAbsolutePath() + " - " + e.getMessage());
+        }
+    }
+
+    private static void writeCallChainsToFile() {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(OUTPUT_FILE))) {
+            for (String caller : callGraph.keySet()) {
+                writer.write(caller + "\n");
+                for (String callee : callGraph.get(caller)) {
+                    writer.write("    → " + callee + "\n");
+                }
+            }
+            System.out.println("✅ 调用关系已成功写入: " + OUTPUT_FILE);
+        } catch (IOException e) {
+            System.err.println("❌ 写入文件失败: " + e.getMessage());
+        }
+    }
+}
+
+
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
