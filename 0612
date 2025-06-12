@@ -1,0 +1,66 @@
+import os
+import re
+import csv
+from git import Repo
+
+# 配置项
+REPO_PATH = '/your/java/project/path'  # 替换为你的 Java 项目路径
+OUTPUT_CSV = './todo_by_commit.csv'
+TODO_PATTERN = re.compile(r'(?i)\bTODO\b[:\- ]?(.*)')  # 匹配 TODO 行
+
+def extract_todos_from_file(file_path):
+    todos = []
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            for i, line in enumerate(f, 1):
+                if 'TODO' in line:
+                    match = TODO_PATTERN.search(line)
+                    if match:
+                        todos.append((i, match.group(0).strip()))
+    except Exception as e:
+        print(f"Error reading {file_path}: {e}")
+    return todos
+
+def extract_all_todos(root_dir):
+    todos = []
+    for dirpath, _, filenames in os.walk(root_dir):
+        for filename in filenames:
+            if filename.endswith('.java'):
+                file_path = os.path.join(dirpath, filename)
+                file_todos = extract_todos_from_file(file_path)
+                rel_path = os.path.relpath(file_path, root_dir)
+                for line_num, text in file_todos:
+                    todos.append((rel_path, line_num, text))
+    return todos
+
+def collect_todos_to_csv(repo_path, output_csv):
+    repo = Repo(repo_path)
+    commits = list(repo.iter_commits())
+    original_branch = repo.active_branch.name
+
+    with open(output_csv, 'w', encoding='utf-8', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['Commit Hash', 'Commit Date', 'Commit Message', 'File Path', 'Line Number', 'TODO Text'])
+
+        for commit in reversed(commits):  # 从旧到新
+            print(f"Checking commit {commit.hexsha[:7]} - {commit.summary}")
+            repo.git.checkout(commit.hexsha)
+
+            todos = extract_all_todos(repo_path)
+            for file_path, line_num, text in todos:
+                writer.writerow([
+                    commit.hexsha,
+                    commit.committed_datetime.isoformat(),
+                    commit.message.strip(),
+                    file_path,
+                    line_num,
+                    text
+                ])
+
+    # 回到原分支
+    repo.git.checkout(original_branch)
+    print(f"\nCSV 完成输出：{output_csv}")
+
+# 主入口
+if __name__ == '__main__':
+    collect_todos_to_csv(REPO_PATH, OUTPUT_CSV)
