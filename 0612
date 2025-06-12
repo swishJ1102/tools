@@ -1,4 +1,89 @@
 import os
+import csv
+import re
+from collections import defaultdict
+from git import Repo
+import mimetypes
+
+# === 配置路径 ===
+REPO_PATH = '/你的/仓库/路径'  # ← 修改为你的 Git 仓库路径
+TODO_CSV = 'todo_details.csv'
+SUMMARY_CSV = 'todo_summary.csv'
+
+TODO_PATTERN = re.compile(r'\bTODO\b[:\- ]?(.*)', re.IGNORECASE)
+
+def is_text_file(file_path):
+    mime_type, _ = mimetypes.guess_type(file_path)
+    return mime_type and (mime_type.startswith('text') or 'json' in mime_type or 'xml' in mime_type)
+
+def extract_todos(content):
+    result = []
+    for i, line in enumerate(content.splitlines(), 1):
+        if 'TODO' in line:
+            match = TODO_PATTERN.search(line)
+            if match:
+                result.append((i, line.strip(), match.group(1).strip()))
+    return result
+
+def analyze_todos_by_file(repo_path, detail_csv, summary_csv):
+    repo = Repo(repo_path)
+    tracked_files = repo.git.ls_tree('-r', '--name-only', 'HEAD').splitlines()
+
+    todo_rows = []
+    summary = defaultdict(lambda: defaultdict(int))  # file -> commit -> count
+
+    for rel_path in tracked_files:
+        if not is_text_file(rel_path):
+            continue
+        print(f'📄 正在处理文件: {rel_path}')
+        commits = list(repo.iter_commits(paths=rel_path))
+
+        for commit in reversed(commits):  # 从旧到新
+            try:
+                blob = commit.tree / rel_path
+                content = blob.data_stream.read().decode('utf-8', errors='ignore')
+                todos = extract_todos(content)
+
+                summary[rel_path][commit.hexsha] = len(todos)
+
+                for line_num, full_line, extracted in todos:
+                    todo_rows.append([
+                        rel_path,
+                        commit.hexsha,
+                        commit.committed_datetime.isoformat(),
+                        commit.author.name,
+                        line_num,
+                        full_line,
+                        extracted
+                    ])
+            except Exception as e:
+                print(f"⚠️ 跳过 {rel_path} @ {commit.hexsha[:7]}: {e}")
+                continue
+
+    # 写详细 TODO CSV
+    with open(detail_csv, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['File Path', 'Commit Hash', 'Commit Date', 'Author', 'Line Number', 'Full Line', 'TODO Text'])
+        writer.writerows(todo_rows)
+    print(f"✅ 已写入详细 TODO: {detail_csv}")
+
+    # 写 TODO 数量摘要
+    with open(summary_csv, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['File Path', 'Commit Hash', 'TODO Count'])
+        for file_path, commits in summary.items():
+            for commit_hash, count in commits.items():
+                writer.writerow([file_path, commit_hash, count])
+    print(f"📊 已写入每版本 TODO 数量: {summary_csv}")
+
+# 调用主函数
+analyze_todos_by_file(REPO_PATH, TODO_CSV, SUMMARY_CSV)
+
+
+
+
+
+import os
 import re
 import csv
 import mimetypes
