@@ -1,6 +1,91 @@
 import os
 import re
 import csv
+import mimetypes
+from git import Repo
+
+# === 配置路径 ===
+REPO_PATH = '/your/project/path'  # ← 替换为你的 Git 工程目录
+OUTPUT_CSV = './todo_detailed_by_commit.csv'
+
+# 正则匹配 TODO（支持 TODO: 或 TODO - 或 TODO 后空格）
+TODO_PATTERN = re.compile(r'(?i)\bTODO\b[:\- ]?(.*)')
+
+# 判断文件是否为文本文件
+def is_text_file(file_path):
+    mime_type, _ = mimetypes.guess_type(file_path)
+    return mime_type and mime_type.startswith('text')
+
+# 提取 TODO（返回整行 & 提取内容）
+def extract_todos_from_file(file_path):
+    todos = []
+    if not os.path.isfile(file_path) or not is_text_file(file_path):
+        return todos
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            for i, line in enumerate(f, 1):
+                if 'TODO' in line:
+                    match = TODO_PATTERN.search(line)
+                    if match:
+                        todos.append((i, line.strip(), match.group(1).strip()))
+    except Exception as e:
+        print(f"[读取失败] {file_path} - {e}")
+    return todos
+
+# 遍历项目所有文件
+def extract_all_todos(root_dir):
+    todos = []
+    for dirpath, _, filenames in os.walk(root_dir):
+        for filename in filenames:
+            file_path = os.path.join(dirpath, filename)
+            rel_path = os.path.relpath(file_path, root_dir)
+            file_todos = extract_todos_from_file(file_path)
+            for line_num, full_line, extracted in file_todos:
+                todos.append((rel_path, line_num, full_line, extracted))
+    return todos
+
+# 主函数：收集所有提交版本中的 TODO 并输出 CSV
+def collect_todos_detailed(repo_path, output_csv):
+    repo = Repo(repo_path)
+    commits = list(repo.iter_commits())
+    original_branch = repo.active_branch.name
+
+    with open(output_csv, 'w', encoding='utf-8', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow([
+            'Commit Hash', 'Commit Date', 'Commit Author', 'Commit Message',
+            'File Path', 'Line Number', 'TODO Full Line', 'TODO Extracted'
+        ])
+
+        for commit in reversed(commits):  # 从旧到新
+            print(f"🔍 正在处理提交 {commit.hexsha[:7]} - {commit.summary}")
+            repo.git.checkout(commit.hexsha)
+
+            todos = extract_all_todos(repo_path)
+            for file_path, line_num, full_line, extracted in todos:
+                writer.writerow([
+                    commit.hexsha,
+                    commit.committed_datetime.isoformat(),
+                    commit.author.name,
+                    commit.message.strip(),
+                    file_path,
+                    line_num,
+                    full_line,
+                    extracted
+                ])
+
+    repo.git.checkout(original_branch)
+    print(f"\n✅ 已完成：TODO 结果已保存至 {output_csv}")
+
+# 执行脚本
+if __name__ == '__main__':
+    collect_todos_detailed(REPO_PATH, OUTPUT_CSV)
+
+
+
+import os
+import re
+import csv
 from git import Repo
 
 # 配置项
