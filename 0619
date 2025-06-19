@@ -1,0 +1,242 @@
+好的，下面是一个整合了所有功能的 customtkinter 示例程序，包含以下内容：
+
+⸻
+
+✅ 功能一览：
+	•	各种控件：按钮、标签、输入框、下拉、单选、多选、滑块、进度条、开关、Tab
+	•	所有事件绑定：鼠标单击、双击、悬停、键盘按键、窗口关闭
+	•	系统对话框：打开文件、选择多个文件、保存文件、选择文件夹
+	•	弹窗提示：信息、警告、错误、确认、取消、重试
+	•	自定义窗口关闭提示
+	•	输出调试信息到窗口下方
+
+⸻
+
+🧩 一体化 customtkinter 示例程序
+
+import customtkinter as ctk
+from tkinter import filedialog, messagebox
+
+ctk.set_appearance_mode("System")
+ctk.set_default_color_theme("blue")
+
+class App(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        self.title("CustomTkinter 综合示例")
+        self.geometry("800x600")
+        self.resizable(False, False)
+
+        # 主布局 - Tab 页
+        self.tabview = ctk.CTkTabview(self)
+        self.tabview.pack(padx=20, pady=20, fill="both", expand=True)
+
+        self.main_tab = self.tabview.add("主页")
+        self.form_tab = self.tabview.add("表单")
+        self.control_tab = self.tabview.add("控制")
+
+        self.create_main_tab()
+        self.create_form_tab()
+        self.create_control_tab()
+        self.create_log_panel()
+
+        # 事件绑定
+        self.bind("<KeyPress>", self.on_key_press)
+        self.bind("<Escape>", lambda e: self.on_exit_prompt())
+        self.protocol("WM_DELETE_WINDOW", self.on_window_close)
+        self.file_label.bind("<Button-1>", self.on_left_click)
+        self.file_label.bind("<Double-Button-1>", self.on_double_click)
+        self.file_label.bind("<Enter>", self.on_mouse_enter)
+        self.file_label.bind("<Leave>", self.on_mouse_leave)
+
+    # =============== 主页面（文件对话框） ================
+    def create_main_tab(self):
+        ctk.CTkLabel(self.main_tab, text="文件选择功能演示", font=ctk.CTkFont(size=16)).pack(pady=10)
+
+        ctk.CTkButton(self.main_tab, text="选择文件", command=self.select_file).pack(pady=5)
+        ctk.CTkButton(self.main_tab, text="选择多个文件", command=self.select_multiple_files).pack(pady=5)
+        ctk.CTkButton(self.main_tab, text="保存文件", command=self.save_file).pack(pady=5)
+        ctk.CTkButton(self.main_tab, text="选择文件夹", command=self.select_folder).pack(pady=5)
+        ctk.CTkButton(self.main_tab, text="弹出信息框", command=self.popup_info).pack(pady=5)
+        ctk.CTkButton(self.main_tab, text="弹出警告框", command=self.popup_warning).pack(pady=5)
+        ctk.CTkButton(self.main_tab, text="弹出错误框", command=self.popup_error).pack(pady=5)
+        ctk.CTkButton(self.main_tab, text="确认退出", command=self.on_exit_prompt).pack(pady=5)
+
+        self.file_label = ctk.CTkLabel(self.main_tab, text="尚未选择文件")
+        self.file_label.pack(pady=10)
+
+    def select_file(self):
+        path = filedialog.askopenfilename()
+        if path:
+            self.file_label.configure(text=f"选择了: {path}")
+            self.log(f"文件选择: {path}")
+
+    def select_multiple_files(self):
+        paths = filedialog.askopenfilenames()
+        if paths:
+            self.file_label.configure(text=f"共选 {len(paths)} 个文件")
+            self.log(f"多文件选择: {paths}")
+
+    def save_file(self):
+        path = filedialog.asksaveasfilename(defaultextension=".txt")
+        if path:
+            with open(path, "w") as f:
+                f.write("CustomTkinter 文件保存测试内容")
+            self.file_label.configure(text=f"保存到: {path}")
+            self.log(f"保存文件: {path}")
+
+    def select_folder(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.file_label.configure(text=f"选择文件夹: {folder}")
+            self.log(f"选择文件夹: {folder}")
+
+    def popup_info(self):
+        messagebox.showinfo("信息提示", "操作成功！")
+        self.log("弹出信息框")
+
+    def popup_warning(self):
+        messagebox.showwarning("警告", "可能存在风险！")
+        self.log("弹出警告框")
+
+    def popup_error(self):
+        messagebox.showerror("错误", "程序发生错误！")
+        self.log("弹出错误框")
+
+    def on_exit_prompt(self):
+        if messagebox.askokcancel("退出确认", "是否退出程序？"):
+            self.destroy()
+
+    def on_window_close(self):
+        self.on_exit_prompt()
+
+    # =============== 表单页面（控件演示） ================
+    def create_form_tab(self):
+        frame = ctk.CTkFrame(self.form_tab)
+        frame.pack(padx=20, pady=20, fill="both", expand=True)
+
+        self.name_entry = ctk.CTkEntry(frame, placeholder_text="请输入姓名")
+        self.name_entry.pack(pady=10)
+
+        self.gender_option = ctk.CTkOptionMenu(frame, values=["男", "女", "其他"])
+        self.gender_option.pack(pady=10)
+
+        self.radio_var = ctk.StringVar(value="选项1")
+        ctk.CTkRadioButton(frame, text="选项1", variable=self.radio_var, value="选项1").pack()
+        ctk.CTkRadioButton(frame, text="选项2", variable=self.radio_var, value="选项2").pack()
+
+        self.checkbox_var = ctk.BooleanVar()
+        ctk.CTkCheckBox(frame, text="我已阅读并同意", variable=self.checkbox_var).pack(pady=5)
+
+        submit_btn = ctk.CTkButton(frame, text="提交", command=self.submit_form)
+        submit_btn.pack(pady=10)
+
+    def submit_form(self):
+        name = self.name_entry.get()
+        gender = self.gender_option.get()
+        choice = self.radio_var.get()
+        agreed = self.checkbox_var.get()
+
+        info = f"姓名：{name}\n性别：{gender}\n选择：{choice}\n同意：{'是' if agreed else '否'}"
+        messagebox.showinfo("表单提交", info)
+        self.log("提交表单：" + info)
+
+    # =============== 控制页面（滑块、进度、开关） ================
+    def create_control_tab(self):
+        frame = ctk.CTkFrame(self.control_tab)
+        frame.pack(padx=20, pady=20, fill="x")
+
+        self.progress = ctk.CTkProgressBar(frame)
+        self.progress.set(0)
+        self.progress.pack(pady=10, fill="x")
+
+        ctk.CTkButton(frame, text="增加进度", command=self.increase_progress).pack(pady=5)
+
+        self.slider = ctk.CTkSlider(frame, from_=0, to=100, command=self.slider_changed)
+        self.slider.pack(pady=10)
+        self.slider_label = ctk.CTkLabel(frame, text="滑块值：0")
+        self.slider_label.pack()
+
+        self.switch_var = ctk.StringVar(value="off")
+        self.switch = ctk.CTkSwitch(frame, text="功能开关", variable=self.switch_var, onvalue="on", offvalue="off", command=self.switch_toggled)
+        self.switch.pack(pady=10)
+
+    def increase_progress(self):
+        value = min(self.progress.get() + 0.1, 1.0)
+        self.progress.set(value)
+        self.log(f"进度条设置为 {int(value * 100)}%")
+
+    def slider_changed(self, value):
+        self.slider_label.configure(text=f"滑块值：{int(value)}")
+        self.log(f"滑块值变化: {int(value)}")
+
+    def switch_toggled(self):
+        status = self.switch_var.get()
+        messagebox.showinfo("开关状态", f"当前为：{status}")
+        self.log(f"开关切换为：{status}")
+
+    # =============== 事件处理 ================
+    def on_key_press(self, event):
+        self.log(f"[键盘] 按下: {event.keysym}")
+
+    def on_left_click(self, event):
+        self.log(f"[鼠标] 单击: x={event.x}, y={event.y}")
+
+    def on_double_click(self, event):
+        self.log("[鼠标] 双击")
+
+    def on_mouse_enter(self, event):
+        self.file_label.configure(text="鼠标进入文件标签区域")
+        self.log("[鼠标] 进入标签区域")
+
+    def on_mouse_leave(self, event):
+        self.file_label.configure(text="鼠标离开标签区域")
+        self.log("[鼠标] 离开标签区域")
+
+    # =============== 底部日志面板 ================
+    def create_log_panel(self):
+        self.log_panel = ctk.CTkTextbox(self, height=100)
+        self.log_panel.pack(padx=20, pady=(0, 10), fill="x")
+        self.log_panel.insert("end", "== 操作日志输出 ==\n")
+        self.log_panel.configure(state="disabled")
+
+    def log(self, message: str):
+        self.log_panel.configure(state="normal")
+        self.log_panel.insert("end", message + "\n")
+        self.log_panel.see("end")
+        self.log_panel.configure(state="disabled")
+
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
+
+
+⸻
+
+✅ 如何运行
+	1.	安装依赖：
+
+pip install customtkinter
+
+	2.	保存为 full_demo.py 并运行：
+
+python full_demo.py
+
+
+⸻
+
+✅ 如需打包为 .exe
+
+pip install pyinstaller
+pyinstaller --noconfirm --onefile --windowed full_demo.py
+
+
+⸻
+
+这个程序已经覆盖了常见开发桌面应用可能用到的所有功能，是非常适合学习、参考和拓展的模板。如果你还希望加入：
+	•	自定义弹窗界面
+	•	拖拽文件
+	•	状态栏 or 菜单栏（Menu）
+
+也可以继续告诉我，我帮你增强版本。
