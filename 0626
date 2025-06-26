@@ -1,4 +1,137 @@
 from PyQt5.QtWidgets import (
+    QGraphicsDropShadowEffect, QPushButton, QWidget, QLabel, QLineEdit, QTableWidget
+)
+from PyQt5.QtGui import QColor, QIcon
+from PyQt5.QtCore import QObject, QEvent, QSize
+
+class NeumorphicHelper(QObject):
+    def __init__(self, dark_mode=False):
+        super().__init__()
+        self.dark_mode = dark_mode
+        self.base_color = QColor(48, 48, 48) if dark_mode else QColor(224, 224, 224)
+        self.shadow_light = QColor(80, 80, 80, 180) if dark_mode else QColor(255, 255, 255, 180)
+        self.shadow_dark = QColor(30, 30, 30, 180) if dark_mode else QColor(180, 180, 180)
+
+    def apply_neumorphism(self, widget, mode='convex'):
+        """
+        应用新拟物态效果
+        mode: 'convex' 凸起（默认）或 'concave' 凹陷
+        """
+        if mode == 'convex':
+            self._apply_shadow(widget, blur=20, xOffset=5, yOffset=5, color=self.shadow_dark)
+        elif mode == 'concave':
+            self._apply_shadow(widget, blur=20, xOffset=-5, yOffset=-5, color=self.shadow_light)
+
+        if isinstance(widget, QPushButton):
+            widget.installEventFilter(self)
+
+    def apply_svg_icon(self, button: QPushButton, svg_path: str, size=24):
+        """
+        给按钮添加 SVG 图标
+        """
+        icon = QIcon(svg_path)
+        button.setIcon(icon)
+        button.setIconSize(QSize(size, size))
+
+    def apply_uniform_style(self, widget: QWidget):
+        """
+        设置整窗统一样式（QSS）
+        """
+        qss = self._dark_qss() if self.dark_mode else self._light_qss()
+        widget.setStyleSheet(qss)
+
+    def _apply_shadow(self, widget, blur=20, xOffset=5, yOffset=5, color=QColor(180, 180, 180)):
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(blur)
+        shadow.setOffset(xOffset, yOffset)
+        shadow.setColor(color)
+        widget.setGraphicsEffect(shadow)
+
+    def eventFilter(self, obj, event):
+        if isinstance(obj, QPushButton):
+            if event.type() == QEvent.Enter:
+                self._apply_shadow(obj, blur=20, xOffset=-4, yOffset=-4, color=self.shadow_light)
+            elif event.type() == QEvent.Leave:
+                self._apply_shadow(obj, blur=20, xOffset=5, yOffset=5, color=self.shadow_dark)
+            elif event.type() == QEvent.MouseButtonPress:
+                self._apply_shadow(obj, blur=30, xOffset=-3, yOffset=-3, color=self.shadow_light)
+            elif event.type() == QEvent.MouseButtonRelease:
+                self._apply_shadow(obj, blur=20, xOffset=5, yOffset=5, color=self.shadow_dark)
+        return super().eventFilter(obj, event)
+
+    def _light_qss(self):
+        return """
+        QWidget {
+            background-color: #E0E0E0;
+            font-family: "Segoe UI", sans-serif;
+        }
+        QLabel {
+            color: #555;
+            font-size: 15px;
+        }
+        QLineEdit, QPushButton, QTableWidget {
+            background-color: #E0E0E0;
+            border-radius: 10px;
+            border: 1px solid #d0d0d0;
+            padding: 8px;
+            color: #333;
+        }
+        QTableWidget {
+            gridline-color: #cccccc;
+        }
+        QHeaderView::section {
+            background-color: #D0D0D0;
+            border: none;
+            padding: 4px;
+            font-weight: bold;
+        }
+        QPushButton:hover {
+            background-color: #dcdcdc;
+        }
+        QPushButton:pressed {
+            background-color: #E0E0E0;
+            border: 1px solid #c0c0c0;
+        }
+        """
+
+    def _dark_qss(self):
+        return """
+        QWidget {
+            background-color: #303030;
+            color: #dddddd;
+            font-family: "Segoe UI", sans-serif;
+        }
+        QLabel {
+            color: #dddddd;
+            font-size: 15px;
+        }
+        QLineEdit, QPushButton, QTableWidget {
+            background-color: #303030;
+            border-radius: 10px;
+            border: 1px solid #505050;
+            padding: 8px;
+            color: #dddddd;
+        }
+        QTableWidget {
+            gridline-color: #555;
+        }
+        QHeaderView::section {
+            background-color: #404040;
+            border: none;
+            padding: 4px;
+            font-weight: bold;
+        }
+        QPushButton:hover {
+            background-color: #3a3a3a;
+        }
+        QPushButton:pressed {
+            background-color: #282828;
+            border: 1px solid #606060;
+        }
+        """
+
+
+from PyQt5.QtWidgets import (
     QGraphicsDropShadowEffect, QPushButton
 )
 from PyQt5.QtGui import QColor
