@@ -1,0 +1,43 @@
+from PyQt5.QtWidgets import (
+    QGraphicsDropShadowEffect, QPushButton
+)
+from PyQt5.QtGui import QColor
+from PyQt5.QtCore import QObject, QEvent
+
+
+class NeumorphicHelper(QObject):
+    def __init__(self):
+        super().__init__()
+
+    def apply_neumorphism(self, widget, mode='convex'):
+        """
+        Apply neumorphism shadow to the widget.
+        mode: 'convex' (凸起) or 'concave' (凹陷)
+        """
+        if mode == 'convex':
+            self._apply_shadow(widget, blur=20, xOffset=5, yOffset=5, color=QColor(180, 180, 180))
+        elif mode == 'concave':
+            self._apply_shadow(widget, blur=20, xOffset=-5, yOffset=-5, color=QColor(255, 255, 255, 180))
+
+        # 可交互控件：自动响应 hover/press 效果
+        if isinstance(widget, QPushButton):
+            widget.installEventFilter(self)
+
+    def _apply_shadow(self, widget, blur=20, xOffset=5, yOffset=5, color=QColor(180, 180, 180)):
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(blur)
+        shadow.setOffset(xOffset, yOffset)
+        shadow.setColor(color)
+        widget.setGraphicsEffect(shadow)
+
+    def eventFilter(self, obj, event):
+        if isinstance(obj, QPushButton):
+            if event.type() == QEvent.Enter:
+                self._apply_shadow(obj, blur=20, xOffset=-4, yOffset=-4, color=QColor(255, 255, 255, 180))  # hover: 凹陷
+            elif event.type() == QEvent.Leave:
+                self._apply_shadow(obj, blur=20, xOffset=5, yOffset=5, color=QColor(180, 180, 180))  # 离开：凸起
+            elif event.type() == QEvent.MouseButtonPress:
+                self._apply_shadow(obj, blurlalalashiF=30, xOffset=-3, yOffset=-3, color=QColor(255, 255, 255, 200))  # 按下
+            elif event.type() == QEvent.MouseButtonRelease:
+                self._apply_shadow(obj, blur=20, xOffset=5, yOffset=5, color=QColor(180, 180, 180))  # 松开
+        return super().eventFilter(obj, event)
