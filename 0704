@@ -1,0 +1,94 @@
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.body.*;
+import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.ast.type.*;
+import com.github.javaparser.utils.SourceRoot;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.util.Optional;
+
+public class NullableProcessor {
+
+    public static void main(String[] args) throws Exception {
+        File projectDir = new File("your-project-root/src"); // 设置为你的工程路径
+        processDirectory(projectDir);
+    }
+
+    public static void processDirectory(File dir) throws Exception {
+        for (File file : dir.listFiles()) {
+            if (file.isDirectory()) {
+                processDirectory(file);
+            } else if (file.getName().endsWith("Table.java")) {
+                processFile(file);
+            }
+        }
+    }
+
+    public static void processFile(File file) throws Exception {
+        CompilationUnit cu = StaticJavaParser.parse(file);
+
+        cu.findAll(ClassOrInterfaceDeclaration.class).forEach(cls -> {
+            // 添加 @NonNullByDefault 注解（如果没有）
+            if (!cls.isAnnotationPresent("NonNullByDefault")) {
+                cls.addAnnotation("NonNullByDefault");
+            }
+
+            // 处理字段
+            for (FieldDeclaration field : cls.getFields()) {
+                // 仅处理 private 成员
+                if (!field.isPrivate()) continue;
+
+                // 检查是否已有 @Nullable
+                if (!field.getAnnotationByName("Nullable").isPresent()) {
+                    field.getVariables().forEach(var -> {
+                        // 修改类型为 @Nullable xxxType
+                        Type originalType = field.getElementType();
+                        field.setElementType(new AnnotatedType(
+                                originalType,
+                                NodeList.nodeList(new MarkerAnnotationExpr("Nullable"))
+                        ));
+
+                        // 添加 getter 方法
+                        String fieldName = var.getNameAsString();
+                        String methodName = fieldName;
+                        String returnType = originalType.toString();
+
+                        // 检查是否已有方法
+                        Optional<MethodDeclaration> existingMethod = cls.getMethodsByName(methodName)
+                                .stream().filter(m -> m.getParameters().isEmpty()).findFirst();
+                        if (!existingMethod.isPresent()) {
+                            MethodDeclaration getter = new MethodDeclaration()
+                                    .setModifiers(Modifier.Keyword.PUBLIC)
+                                    .setType(returnType)
+                                    .setName(methodName)
+                                    .setBody(new BlockStmt().addStatement(
+                                            StaticJavaParser.parseStatement(
+                                                    "return java.util.Objects.requireNonNull(" + fieldName + ");"
+                                            )));
+
+                            cls.addMember(getter);
+                        }
+                    });
+                }
+            }
+        });
+
+        // 添加 import（如果需要）
+        if (!cu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("javax.annotation.Nullable"))) {
+            cu.addImport("javax.annotation.Nullable");
+        }
+        if (!cu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("org.eclipse.jdt.annotation.NonNullByDefault"))) {
+            cu.addImport("org.eclipse.jdt.annotation.NonNullByDefault");
+        }
+        if (!cu.getImports().stream().anyMatch(i -> i.getNameAsString().equals("java.util.Objects"))) {
+            cu.addImport("java.util.Objects");
+        }
+
+        // 写回文件
+        System.out.println("Processed: " + file.getPath());
+        java.nio.file.Files.write(file.toPath(), cu.toString().getBytes());
+    }
+}
